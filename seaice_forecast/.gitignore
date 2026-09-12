@@ -52,6 +52,7 @@ checkpoints/
 
 # Output
 output/
+*_evaluation_output.txt
 *.png
 *.jpg
 *.pdf
