@@ -1,9 +1,10 @@
 {
+  "phase": 2,
   "split": "val",
   "n_samples": 63,
   "input_shape": [
     63,
-    7,
+    49,
     316,
     332
   ],
@@ -13,6 +14,16 @@
     316,
     332
   ],
+  "variable_order": [
+    "sic",
+    "wind_u",
+    "wind_v",
+    "air_temp",
+    "sst",
+    "current_u",
+    "current_v"
+  ],
+  "channels_per_variable": 7,
   "date_pairs": [
     [
       "2019-01-07",
@@ -266,8 +277,5 @@
       "2019-03-10",
       "2019-03-11"
     ]
-  ],
-  "input_window": 7,
-  "forecast_horizon": 1,
-  "synthetic": true
+  ]
 }

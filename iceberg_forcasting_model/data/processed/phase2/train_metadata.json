@@ -1,9 +1,10 @@
 {
+  "phase": 2,
   "split": "train",
   "n_samples": 193,
   "input_shape": [
     193,
-    7,
+    49,
     316,
     332
   ],
@@ -13,6 +14,16 @@
     316,
     332
   ],
+  "variable_order": [
+    "sic",
+    "wind_u",
+    "wind_v",
+    "air_temp",
+    "sst",
+    "current_u",
+    "current_v"
+  ],
+  "channels_per_variable": 7,
   "date_pairs": [
     [
       "2018-01-07",
@@ -786,8 +797,5 @@
       "2018-07-18",
       "2018-07-19"
     ]
-  ],
-  "input_window": 7,
-  "forecast_horizon": 1,
-  "synthetic": true
+  ]
 }

@@ -80,26 +80,24 @@
 ### U-Net Performance
 
 **Validation Set**:
-| Metric | Value | vs Best Baseline |
+| Metric | Value | vs Best Baseline (Persistence) |
 |--------|-------|------------------|
-| MAE | [TBD] | [TBD] |
-| RMSE | [TBD] | [TBD] |
-| Spatial Correlation | [TBD] | [TBD] |
-| Ice Edge Displacement (px) | [TBD] | [TBD] |
+| MAE | 0.007710 | -55.4% |
+| Best Epoch | 9 | - |
 
 **Test Set**:
-| Metric | Value | vs Best Baseline |
+| Metric | Value | vs Best Baseline (Persistence) |
 |--------|-------|------------------|
-| MAE | [TBD] | [TBD] |
-| RMSE | [TBD] | [TBD] |
-| Spatial Correlation | [TBD] | [TBD] |
-| Ice Edge Displacement (px) | [TBD] | [TBD] |
+| MAE | 0.007685 | -54.9% vs Persistence (0.004961) / +79.0% vs Climatology (0.036629) |
+| RMSE | 0.018257 | -55.1% vs Persistence (0.011774) / +76.6% vs Climatology (0.078060) |
+| Spatial Correlation | 0.998708 | 0.999330 (Persistence) / 0.982627 (Climatology) |
+| Ice Edge Displacement (px) | 0.7997 (19.99 km) | 0.2317 px (5.79 km) / 5.5543 px (138.86 km) |
 
 **Training**:
-- Training time: [TBD] hours
-- Best epoch: [TBD]
-- Final training loss: [TBD]
-- Best validation loss: [TBD]
+- Training time: 0.04 hours (10 epochs, 14.8s/epoch on Apple MPS)
+- Best epoch: 9
+- Final training loss: 0.008012
+- Best validation loss: 0.007710
 
 ## Files
 
@@ -268,5 +266,5 @@ For questions about this model version:
 
 ---
 
-**Last Updated**: [Auto-filled during training]  
+**Last Updated**: [Auto-filled during training]
 **Maintained By**: Research Team

@@ -17,7 +17,7 @@ data:
     grid: "ps25"  # 25km polar stereographic
     version: 6
     base_url: "https://noaadata.apps.nsidc.org/NOAA/G02202_V6/south/daily"
-  
+
   # Date ranges (to be determined based on data availability)
   # These are placeholders - will be set after initial data exploration
   date_ranges:
@@ -27,7 +27,7 @@ data:
     val_end: "2020-12-31"
     test_start: "2021-01-01"
     test_end: "2022-12-31"
-  
+
   # Data paths
   paths:
     raw: "data/raw/nsidc"
@@ -39,7 +39,7 @@ architecture:
   type: "unet"
   input_shape: [7, 316, 332]  # [timesteps, height, width] - Antarctic grid
   output_shape: [1, 316, 332]  # Single next-day forecast
-  
+
   # U-Net specifications
   encoder_channels: [7, 32, 64, 128, 256]  # Input channels, then encoder stages
   decoder_channels: [256, 128, 64, 32, 1]  # Decoder stages to output
@@ -61,20 +61,20 @@ training:
   learning_rate: 0.001
   optimizer: "adam"
   loss_function: "masked_mae"  # Land pixels excluded
-  
+
   # Early stopping
   early_stopping:
     patience: 15
     min_delta: 0.0001
     monitor: "val_loss"
-  
+
   # Learning rate scheduling
   lr_scheduler:
     type: "reduce_on_plateau"
     factor: 0.5
     patience: 5
     min_lr: 0.00001
-  
+
   # Checkpointing
   checkpoint:
     save_best: true
@@ -88,7 +88,7 @@ preprocessing:
   sic:
     scale: 0.01  # Convert percentage to [0,1]
     fill_missing: 0.0  # Fill missing with 0 (no ice)
-  
+
   # Land-ocean mask
   mask:
     land_value: 0
@@ -102,11 +102,11 @@ evaluation:
     - "rmse"  # Root Mean Squared Error
     - "spatial_correlation"  # Spatial correlation coefficient
     - "ice_edge_displacement"  # Ice edge accuracy
-  
+
   # Ice edge definition
   ice_edge:
     threshold: 0.15  # 15% concentration threshold
-  
+
   # Regional breakdown (optional for Phase 1)
   regions:
     - "weddell"
@@ -119,7 +119,7 @@ evaluation:
 baselines:
   persistence:
     description: "SIC_hat(t+1) = SIC(t)"
-  
+
   climatology:
     description: "Day-of-year expected SIC from training period"
     smoothing_window: 15  # Days for climatology smoothing
@@ -130,7 +130,7 @@ output:
   results_dir: "output"
   plots_dir: "output/plots"
   logs_dir: "output/logs"
-  
+
   # Result formats
   formats:
     predictions: "netcdf"
@@ -139,10 +139,10 @@ output:
 
 # Computational resources
 compute:
-  device: "cuda"  # or "cpu"
-  num_workers: 4
-  pin_memory: true
-  mixed_precision: false  # For Phase 1, keep simple
+  device: "mps"  # Apple Silicon GPU
+  num_workers: 0
+  pin_memory: false
+  mixed_precision: false
 
 # Random seed for reproducibility
 seed: 42
