@@ -29,6 +29,7 @@ import logging
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from seaice_forecast.models.unet import UNet
+from seaice_forecast.models.unet_convlstm import UNetConvLSTM
 
 logging.basicConfig(
     level=logging.INFO,
@@ -45,11 +46,11 @@ class MPSBenchmark:
         Initialize benchmark.
 
         Args:
-            model_type: 'phase1' (7 channels) or 'phase2' (49 channels)
+            model_type: 'phase1' (7 channels), 'phase2' (49 channels), or 'phase3' (ConvLSTM [7, 7])
         """
         self.model_type = model_type
-        self.input_channels = 7 if model_type == 'phase1' else 49
-        self.H, self.W = 316, 332
+        self.input_channels = 7 if model_type in ('phase1', 'phase3') else 49
+        self.H, self.W = 332, 316
 
         # Device setup
         self.setup_device()
@@ -75,10 +76,14 @@ class MPSBenchmark:
     def create_synthetic_data(self, n_samples=100):
         """Create synthetic data matching real data shapes."""
         logger.info(f"\nCreating synthetic data for {self.model_type}")
-        logger.info(f"  Input shape: [{n_samples}, {self.input_channels}, {self.H}, {self.W}]")
+        if self.model_type == 'phase3':
+            logger.info(f"  Input shape: [{n_samples}, 7, 7, {self.H}, {self.W}]")
+            inputs = torch.randn(n_samples, 7, 7, self.H, self.W)
+        else:
+            logger.info(f"  Input shape: [{n_samples}, {self.input_channels}, {self.H}, {self.W}]")
+            inputs = torch.randn(n_samples, self.input_channels, self.H, self.W)
 
-        # Random inputs and targets
-        inputs = torch.randn(n_samples, self.input_channels, self.H, self.W)
+        # Random targets and masks
         targets = torch.randn(n_samples, 1, self.H, self.W).clamp(0, 1)
         masks = torch.ones(n_samples, 1, self.H, self.W)
 
@@ -86,7 +91,21 @@ class MPSBenchmark:
         logger.info(f"  Dataset created: {len(self.dataset)} samples")
 
     def create_model(self):
-        """Create U-Net model."""
+        """Create model for benchmarking."""
+        if self.model_type == 'phase3':
+            model = UNetConvLSTM(
+                in_channels=7,
+                output_channels=1,
+                seq_len=7,
+                encoder_channels=[32, 64, 128, 256],
+                convlstm_layers=1,
+                use_batch_norm=True,
+                output_activation='sigmoid'
+            )
+            total = sum(p.numel() for p in model.parameters())
+            logger.info(f"Model created: {total:,} parameters")
+            return model
+
         model = UNet(
             input_channels=self.input_channels,
             output_channels=1,
@@ -520,14 +539,14 @@ def main():
     parser = argparse.ArgumentParser(description="MPS Training Benchmark")
     parser.add_argument(
         '--model-type',
-        choices=['phase1', 'phase2'],
+        choices=['phase1', 'phase2', 'phase3'],
         default='phase1',
         help='Model type to benchmark'
     )
     parser.add_argument(
         '--full-benchmark',
         action='store_true',
-        help='Run benchmarks for both model types'
+        help='Run benchmarks for all model types (phase1, phase2, phase3)'
     )
     parser.add_argument(
         '--check-fallbacks',
@@ -551,7 +570,7 @@ def main():
         return
 
     # Run benchmarks
-    model_types = ['phase1', 'phase2'] if args.full_benchmark else [args.model_type]
+    model_types = ['phase1', 'phase2', 'phase3'] if args.full_benchmark else [args.model_type]
 
     for model_type in model_types:
         benchmark = MPSBenchmark(model_type=model_type)

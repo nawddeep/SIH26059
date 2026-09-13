@@ -993,8 +993,14 @@ def main():
     parser.add_argument(
         '--synthetic',
         action='store_true',
-        default=True,
-        help='Generate physically coupled synthetic data (default: True)'
+        default=False,
+        help='DEPRECATED: Synthetic data is strictly disabled by default (default: False)'
+    )
+    parser.add_argument(
+        '--i-know-this-is-fake',
+        action='store_true',
+        default=False,
+        help='Explicit opt-in required to acknowledge non-real data for development testing'
     )
     parser.add_argument(
         '--skip-existing',

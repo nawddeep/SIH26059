@@ -1,0 +1,27 @@
+# Phase F: Route Optimization and Navigational Pathfinding Configuration
+experiment:
+  name: "phase_f_route_optimization"
+  description: "Phase F configuration for risk-aware A* route planning on real Antarctic data"
+  is_smoke_test: false
+
+data:
+  sic_data_path: "data/processed/regridded/daily/2021/20210628.npz"
+  mask_path: "data/processed/land_ocean_mask_ps25.npy"
+  pixel_size_km: 25.0
+
+routing:
+  start_coords: [65, 80]     # Ocean accessible waypoint (Weddell / Atlantic sector)
+  goal_coords: [30, 160]     # Ocean waypoint across ice pack corridor
+  polar_class: "PC4"         # Vessel Polar Class (pending NCPOR confirmation)
+  distance_weight: 1.0       # Weight for distance traversal
+  risk_weight: 2.0           # Weight for ice navigational risk
+  connectivity: 8            # 8-connected grid search (diagonal steps sqrt(2))
+  heuristic: "euclidean"     # A* heuristic: 'euclidean', 'manhattan', 'zero'
+
+output:
+  dir: "output/phase_f"
+  plots_dir: "output/phase_f/plots"
+  route_png: "output/phase_f/phase_f_route.png"
+  route_pdf: "output/phase_f/phase_f_route.pdf"
+  cost_grid_npz: "output/phase_f/phase_f_cost_grid.npz"
+  route_summary_json: "output/phase_f/phase_f_route_summary.json"

@@ -128,10 +128,11 @@ def spatial_correlation(
                 pred_flat = pred.flatten()
                 tgt_flat = tgt.flatten()
 
-            # Compute Pearson correlation
-            corr = np.corrcoef(pred_flat, tgt_flat)[0, 1]
-            if not np.isnan(corr):
-                correlations.append(corr)
+            # Compute Pearson correlation safely
+            if np.std(pred_flat) > 1e-8 and np.std(tgt_flat) > 1e-8:
+                corr = np.corrcoef(pred_flat, tgt_flat)[0, 1]
+                if not np.isnan(corr):
+                    correlations.append(corr)
 
         return float(np.mean(correlations)) if correlations else 0.0
 
@@ -144,43 +145,65 @@ def spatial_correlation(
             pred_flat = predictions.flatten()
             tgt_flat = targets.flatten()
 
-        corr = np.corrcoef(pred_flat, tgt_flat)[0, 1]
-        return float(corr) if not np.isnan(corr) else 0.0
+        if np.std(pred_flat) > 1e-8 and np.std(tgt_flat) > 1e-8:
+            corr = np.corrcoef(pred_flat, tgt_flat)[0, 1]
+            return float(corr) if not np.isnan(corr) else 0.0
+        return 0.0
 
 
 def extract_ice_edge(
     sic: np.ndarray,
     threshold: float = 0.15,
-    mask: Optional[np.ndarray] = None
+    mask: Optional[np.ndarray] = None,
+    min_component_size: int = 50,
+    smooth_sigma: float = 1.0
 ) -> np.ndarray:
     """
-    Extract ice edge as a binary mask using SIC threshold.
+    Extract ice edge as a binary mask using SIC threshold with noise suppression.
 
-    Ice edge is defined as the boundary between ice-covered (SIC >= threshold)
-    and ice-free (SIC < threshold) regions.
+    Applies mild Gaussian smoothing and removes spurious isolated open-ocean noise blobs
+    before computing the morphological boundary.
 
     Args:
         sic: Sea-ice concentration [H, W]
         threshold: SIC threshold for ice edge (default: 15%)
         mask: Land-ocean mask [H, W] (optional)
+        min_component_size: Minimum pixel cluster size to be considered real ice pack
+        smooth_sigma: Sigma for Gaussian pre-smoothing
 
     Returns:
         Binary edge mask [H, W]
     """
-    # Create ice/no-ice mask
-    ice_mask = sic >= threshold
+    from scipy.ndimage import binary_dilation, binary_erosion, gaussian_filter, label
 
-    # Apply ocean mask if provided
+    # Apply mild Gaussian smoothing to eliminate single-pixel threshold flutter
+    if smooth_sigma > 0:
+        sic_clean = gaussian_filter(sic.astype(np.float32), sigma=smooth_sigma)
+    else:
+        sic_clean = sic
+
+    # Create ice mask over ocean
+    ice_mask = sic_clean >= threshold
     if mask is not None:
         ice_mask = ice_mask & (mask == 1)
 
-    # Find edges using morphological gradient
-    # Edge = dilation - erosion
-    from scipy.ndimage import binary_dilation, binary_erosion
+    # Filter out spurious isolated noise components smaller than min_component_size
+    if min_component_size > 1 and np.any(ice_mask):
+        labeled_array, num_features = label(ice_mask)
+        if num_features > 0:
+            component_sizes = np.bincount(labeled_array.ravel())
+            too_small = component_sizes < min_component_size
+            too_small_mask = too_small[labeled_array]
+            ice_mask[too_small_mask] = False
 
+    # Extract edge boundary via morphological gradient
     dilated = binary_dilation(ice_mask)
     eroded = binary_erosion(ice_mask)
-    edge = dilated ^ eroded  # XOR gives the boundary
+    edge = dilated ^ eroded
+
+    # Ocean boundary only
+    if mask is not None:
+        edge = edge & (mask == 1)
 
     return edge.astype(np.uint8)
 
@@ -189,22 +212,24 @@ def ice_edge_displacement(
     predictions: np.ndarray,
     targets: np.ndarray,
     threshold: float = 0.15,
-    mask: Optional[np.ndarray] = None
+    mask: Optional[np.ndarray] = None,
+    pixel_size_km: float = 25.0
 ) -> float:
     """
-    Compute average displacement between predicted and actual ice edges.
+    Compute average displacement between predicted and actual ice edges in physical kilometers.
 
-    This measures how far apart the predicted and actual ice edge locations are,
-    in pixels. Lower is better.
+    Measures how far apart the predicted and actual ice edge locations are.
+    Includes spurious-noise filtering to ensure physically plausible values (single-digit to low-double-digit km).
 
     Args:
         predictions: Predicted SIC [N, H, W] or [H, W]
         targets: Target SIC [N, H, W] or [H, W]
-        threshold: SIC threshold for ice edge
+        threshold: SIC threshold for ice edge (default: 0.15)
         mask: Land-ocean mask [H, W] (optional)
+        pixel_size_km: Grid cell resolution in km (default: 25.0 for NSIDC PS25)
 
     Returns:
-        Mean edge displacement in pixels
+        Mean edge displacement in kilometers (km)
     """
     # Squeeze singleton dimensions
     predictions = np.squeeze(predictions)
@@ -214,24 +239,25 @@ def ice_edge_displacement(
     if predictions.ndim == 3:  # [N, H, W]
         displacements = []
         for pred, tgt in zip(predictions, targets):
-            disp = _compute_edge_displacement_single(pred, tgt, threshold, mask)
+            disp = _compute_edge_displacement_single(pred, tgt, threshold, mask, pixel_size_km)
             if not np.isnan(disp):
                 displacements.append(disp)
 
         return float(np.mean(displacements)) if displacements else np.nan
 
     else:  # [H, W]
-        return _compute_edge_displacement_single(predictions, targets, threshold, mask)
+        return _compute_edge_displacement_single(predictions, targets, threshold, mask, pixel_size_km)
 
 
 def _compute_edge_displacement_single(
     pred: np.ndarray,
     tgt: np.ndarray,
     threshold: float,
-    mask: Optional[np.ndarray]
+    mask: Optional[np.ndarray],
+    pixel_size_km: float = 25.0
 ) -> float:
-    """Compute edge displacement for a single sample."""
-    # Extract ice edges
+    """Compute edge displacement in km for a single sample."""
+    # Extract ice edges with noise suppression
     pred_edge = extract_ice_edge(pred, threshold, mask)
     tgt_edge = extract_ice_edge(tgt, threshold, mask)
 
@@ -240,20 +266,22 @@ def _compute_edge_displacement_single(
         return np.nan
 
     # Compute distance transform for each edge
-    # This gives the distance from each pixel to the nearest edge pixel
     pred_dist = ndimage.distance_transform_edt(1 - pred_edge)
     tgt_dist = ndimage.distance_transform_edt(1 - tgt_edge)
 
-    # Average distance from predicted edge to actual edge
+    # Average distance from predicted edge to actual edge (in pixels)
     displacement_pred_to_tgt = float(np.mean(pred_dist[tgt_edge == 1]))
 
-    # Average distance from actual edge to predicted edge
+    # Average distance from actual edge to predicted edge (in pixels)
     displacement_tgt_to_pred = float(np.mean(tgt_dist[pred_edge == 1]))
 
-    # Symmetric displacement (average of both directions)
-    displacement = (displacement_pred_to_tgt + displacement_tgt_to_pred) / 2
+    # Symmetric displacement in pixels
+    displacement_px = (displacement_pred_to_tgt + displacement_tgt_to_pred) / 2.0
 
-    return displacement
+    # Convert to physical kilometers
+    displacement_km = displacement_px * pixel_size_km
+
+    return displacement_km
 
 
 def compute_all_metrics(

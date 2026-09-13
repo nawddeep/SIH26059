@@ -1,0 +1,41 @@
+# Phase D Multi-Horizon Full Training Configuration
+experiment:
+  name: "phase_d_full_training"
+  description: "Full multi-horizon forecasting (+1d, +3d, +5d, +7d) training on complete daily dataset"
+  is_smoke_test: false
+
+data:
+  daily_dir: "data/processed/regridded/daily"
+  mask_path: "data/processed/land_ocean_mask_ps25.npy"
+  input_window: 7       # Full 7-day history window [B, T=7, C=7, H, W]
+  horizons: [1, 3, 5, 7] # Full target forecast lead times (+1, +3, +5, +7 days)
+  phase: "phase2"
+  pixel_size_km: 25.0
+
+model:
+  mode: "direct"        # "direct" or "recursive"
+  in_channels: 7
+  output_channels: 1
+  seq_len: 7
+  encoder_channels: [32, 64, 128, 256]
+  convlstm_layers: 1
+  dropout: 0.1
+  checkpoint_path: "models/checkpoints/phase3/sic_unet_convlstm_v001_best.pt"
+
+training:
+  batch_size: 2
+  learning_rate: 1.0e-3
+  weight_decay: 1.0e-4
+  grad_clip: 1.0
+  epochs: 50
+  loss_weights:
+    1: 1.0
+    3: 1.0
+    5: 1.0
+    7: 1.0
+
+output:
+  dir: "output/phase_d"
+  plots_dir: "output/phase_d/plots"
+  metrics_csv: "output/phase_d/metrics_summary.csv"
+  metrics_json: "output/phase_d/metrics_summary.json"

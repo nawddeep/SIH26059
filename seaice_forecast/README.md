@@ -383,15 +383,68 @@ Replace static U-Net with ConvLSTM:
 - Better capture temporal dependencies
 - Improved multi-day forecasting
 
-### Phase 4: Multi-Horizon Forecasting
-Extend to 3-7 day forecasts:
-- Recursive or direct multi-output approach
-- Quantify error accumulation with lead time
+### Phase 4 / Phase D: Multi-Horizon Forecasting
+Extend forecasting to multi-day horizons (+1, +3, +5, +7 days):
+- **Direct Multi-Head Architecture**: Shared ConvLSTM spatial-temporal encoder/bottleneck with dedicated upsampling heads for each lead time (+1d, +3d, +5d, +7d).
+- **Recursive Autoregressive Rollout**: Single-step ConvLSTM model recursively fed back into its history window with environmental persistence to project future horizons.
+- **Evaluation Pipeline**: Per-horizon MAE, RMSE, Pearson spatial correlation, and physically calibrated ice-edge displacement (25 km grid cells, with Gaussian smoothing and connected-component noise filtering).
+- **Persistence Baseline**: Automatic calculation of persistence benchmark across all lead times.
+- **Diagnostic Curves**: Error-vs-lead-time 4-panel plots (PNG/PDF).
 
-### Phase 5: Operational Integration
-- Define risk function: `risk = f(SIC)`
-- Convert SIC forecasts to cost surfaces
-- Interface with route optimization
+#### Quick Smoke Test
+Run the end-to-end multi-horizon smoke test on available real data slices:
+```bash
+python smoke_test_phase_d.py --config configs/phase_d_smoke.yaml
+```
+Output artifacts generated:
+- `output/phase_d/SMOKE_TEST_ONLY_metrics_summary.csv`
+- `output/phase_d/SMOKE_TEST_ONLY_metrics_summary.json`
+- `output/phase_d/plots/SMOKE_TEST_ONLY_error_vs_lead_time.png` and `.pdf`
+
+#### Run Unit Tests
+```bash
+pytest tests/test_phase_d.py -v
+```
+
+#### Full Multi-Horizon Training (Once Full Dataset is Regridded)
+Train the direct multi-head model for 50 epochs on Apple Silicon MPS or CUDA GPU:
+```bash
+python scripts/training/train_phase4_multi_horizon.py --config configs/phase_d_full.yaml --mode direct
+```
+Or perform multi-horizon recursive rollout evaluation using an existing Phase C checkpoint:
+```bash
+python scripts/training/train_phase4_multi_horizon.py --config configs/phase_d_full.yaml --mode recursive
+```
+
+### Phase 5 / Phase E: Uncertainty Quantification & Navigational Risk Function
+See detailed documentation in [README_phase_e.md](file:///Users/nawdddep/Documents/iceberg_models/iceberg_models-main/seaice_forecast/README_phase_e.md).
+- **Lead-Time Uncertainty Quantification**: Parametric dispersion model ($\sigma(h) = a \cdot h + b$) capturing increasing forecast error variance from $+1\text{d}$ to $+7\text{d}$.
+- **IMO POLARIS Risk Function ($R_{\text{ice}} = f(\text{SIC}, \text{PolarClass})$)**: Operational navigation cost function based on IMO Polar Operational Limit Assessment Risk Indexing System (MSC.1/Circ.1519).
+- **Vessel Class Sensitivity**: Explicit parameter for vessel Polar Class (PC1 to PC7 or Unclassed; pending NCPOR stakeholder confirmation).
+
+#### Run Phase E Demo and Tests
+```bash
+# Run unit tests
+pytest tests/test_phase_e.py -v
+
+# Run demonstration script
+python demo_phase_e.py --config configs/phase_e.yaml
+```
+
+### Phase 6 / Phase F: Route Optimization & Navigational Pathfinding
+See detailed documentation in [README_phase_f.md](file:///Users/nawdddep/Documents/iceberg_models/iceberg_models-main/seaice_forecast/README_phase_f.md).
+- **8-Connected A* & Dijkstra Pathfinding**: Least-cost maritime navigation paths avoiding land barriers and high-risk ice packs.
+- **Dynamic Cost Balancing**: Traversal cost combines physical distance with IMO POLARIS navigational risk ($C = w_{\text{dist}} \cdot d + w_{\text{risk}} \cdot R_{\text{ice}}$).
+- **Baseline Comparison**: Compares against straight-line navigational benchmarks, tracking risk reduction, detour km, and high-risk cell avoidance.
+
+#### Run Phase F Demo and Tests
+```bash
+# Run unit tests
+pytest tests/test_phase_f.py -v
+
+# Run demonstration script on real data
+python demo_phase_f.py --config configs/phase_f.yaml
+```
 
 ## Troubleshooting
 
