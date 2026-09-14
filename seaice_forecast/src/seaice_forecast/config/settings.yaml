@@ -18,27 +18,26 @@ data:
     version: 6
     base_url: "https://noaadata.apps.nsidc.org/NOAA/G02202_V6/south/daily"
 
-  # Date ranges (to be determined based on data availability)
-  # These are placeholders - will be set after initial data exploration
+  # Date ranges — updated for 2024 real NSIDC CDR v6 data
   date_ranges:
-    train_start: "2010-01-01"
-    train_end: "2018-12-31"
-    val_start: "2019-01-01"
-    val_end: "2020-12-31"
-    test_start: "2021-01-01"
-    test_end: "2022-12-31"
+    train_start: "2024-01-01"
+    train_end: "2024-09-30"
+    val_start: "2024-10-01"
+    val_end: "2024-11-30"
+    test_start: "2024-12-01"
+    test_end: "2024-12-31"
 
   # Data paths
   paths:
-    raw: "data/raw/nsidc"
+    raw: "data/raw/real/nsidc"
     processed: "data/processed"
     mask: "data/processed/land_ocean_mask.nc"
 
 # Model architecture
 architecture:
   type: "unet"
-  input_shape: [7, 316, 332]  # [timesteps, height, width] - Antarctic grid
-  output_shape: [1, 316, 332]  # Single next-day forecast
+  input_shape: [7, 332, 316]  # [timesteps, height, width] - Antarctic grid (y=332, x=316)
+  output_shape: [1, 332, 316]  # Single next-day forecast
 
   # U-Net specifications
   encoder_channels: [7, 32, 64, 128, 256]  # Input channels, then encoder stages

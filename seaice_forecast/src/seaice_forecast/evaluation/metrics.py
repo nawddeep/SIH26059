@@ -155,14 +155,16 @@ def extract_ice_edge(
     sic: np.ndarray,
     threshold: float = 0.15,
     mask: Optional[np.ndarray] = None,
-    min_component_size: int = 50,
-    smooth_sigma: float = 1.0
+    min_component_size: int = 100,
+    smooth_sigma: float = 2.0
 ) -> np.ndarray:
     """
     Extract ice edge as a binary mask using SIC threshold with noise suppression.
 
-    Applies mild Gaussian smoothing and removes spurious isolated open-ocean noise blobs
-    before computing the morphological boundary.
+    Applies Gaussian smoothing, morphological closing (to fill interior gaps in
+    the ice pack that arise from diffuse predictions), opening (to remove small
+    speckles), and connected-component filtering before computing the
+    morphological boundary.
 
     Args:
         sic: Sea-ice concentration [H, W]
@@ -174,20 +176,32 @@ def extract_ice_edge(
     Returns:
         Binary edge mask [H, W]
     """
-    from scipy.ndimage import binary_dilation, binary_erosion, gaussian_filter, label
+    from scipy.ndimage import (
+        binary_dilation, binary_erosion, binary_closing, binary_opening,
+        gaussian_filter, label,
+    )
 
-    # Apply mild Gaussian smoothing to eliminate single-pixel threshold flutter
+    sic = sic.astype(np.float32)
+
+    # 1. Gaussian smoothing — eliminates single-pixel threshold flutter
     if smooth_sigma > 0:
-        sic_clean = gaussian_filter(sic.astype(np.float32), sigma=smooth_sigma)
+        sic_clean = gaussian_filter(sic, sigma=smooth_sigma)
     else:
         sic_clean = sic
 
-    # Create ice mask over ocean
+    # 2. Threshold to binary ice mask
     ice_mask = sic_clean >= threshold
     if mask is not None:
         ice_mask = ice_mask & (mask == 1)
 
-    # Filter out spurious isolated noise components smaller than min_component_size
+    # 3. Morphological closing — fills narrow gaps inside the ice pack
+    #    that diffuse predictions create below the threshold.
+    ice_mask = binary_closing(ice_mask, iterations=3)
+
+    # 4. Morphological opening — removes small isolated speckles
+    ice_mask = binary_opening(ice_mask, iterations=1)
+
+    # 5. Connected-component filtering — remove remnants smaller than threshold
     if min_component_size > 1 and np.any(ice_mask):
         labeled_array, num_features = label(ice_mask)
         if num_features > 0:
@@ -196,7 +210,7 @@ def extract_ice_edge(
             too_small_mask = too_small[labeled_array]
             ice_mask[too_small_mask] = False
 
-    # Extract edge boundary via morphological gradient
+    # 6. Extract edge boundary via morphological gradient
     dilated = binary_dilation(ice_mask)
     eroded = binary_erosion(ice_mask)
     edge = dilated ^ eroded

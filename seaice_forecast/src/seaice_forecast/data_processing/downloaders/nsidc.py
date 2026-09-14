@@ -29,7 +29,7 @@ class NSIDCDownloader:
     """Production downloader for NSIDC Sea Ice Concentration CDR v6."""
 
     def __init__(self, output_dir: Optional[Path] = None, hemisphere: str = "south"):
-        self.output_dir = Path(output_dir) if output_dir else Path("data/raw/nsidc")
+        self.output_dir = Path(output_dir) if output_dir else Path("data/raw/real/nsidc")
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.hemisphere = hemisphere
         self.base_url = f"https://noaadata.apps.nsidc.org/NOAA/G02202_V6/{hemisphere}/daily"

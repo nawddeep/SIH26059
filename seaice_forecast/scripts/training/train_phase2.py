@@ -25,9 +25,209 @@ import numpy as np
 import torch
 import json
 from datetime import datetime
+import platform
+import os
+import subprocess
+import time
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+
+
+# =============================================================================
+# Inline Hardware Detection and Auto-Tuning (No external dependencies)
+# =============================================================================
+
+def detect_hardware():
+    """Detect Mac hardware and print configuration."""
+    try:
+        chip = subprocess.run(
+            ["sysctl", "-n", "machdep.cpu.brand_string"],
+            capture_output=True, text=True, timeout=5
+        ).stdout.strip()
+    except Exception:
+        chip = platform.processor() or "Unknown CPU"
+    
+    cores = os.cpu_count() or 1
+    
+    try:
+        mem_bytes = int(subprocess.run(
+            ["sysctl", "-n", "hw.memsize"],
+            capture_output=True, text=True, timeout=5
+        ).stdout.strip())
+        mem_gb = mem_bytes / (1024**3)
+    except Exception:
+        mem_gb = 8.0  # fallback
+    
+    mps_available = torch.backends.mps.is_available() if hasattr(torch.backends, 'mps') else False
+    cuda_available = torch.cuda.is_available()
+    
+    print("=" * 70)
+    print("HARDWARE DETECTION")
+    print("=" * 70)
+    print(f"Chip:      {chip}")
+    print(f"Cores:     {cores}")
+    print(f"RAM:       {mem_gb:.1f} GB")
+    print(f"MPS:       {mps_available}")
+    print(f"CUDA:      {cuda_available}")
+    print(f"PyTorch:   {torch.__version__}")
+    print("=" * 70)
+    
+    return {
+        "chip": chip,
+        "cores": cores,
+        "mem_gb": mem_gb,
+        "mps": mps_available,
+        "cuda": cuda_available
+    }
+
+
+def quick_batch_size_probe(model, sample_input_shape, device, candidate_sizes=[2, 4, 8, 16]):
+    """
+    Quick batch size calibration (~15-20 seconds).
+    Tests a few candidates and picks the largest that runs cleanly.
+    
+    Args:
+        model: The model to test
+        sample_input_shape: Tuple of (C, H, W) for input
+        device: torch device
+        candidate_sizes: List of batch sizes to test
+        
+    Returns:
+        Best batch size (int)
+    """
+    print("\nQuick batch size probe (testing a few candidates)...")
+    model.eval()
+    
+    best_size = candidate_sizes[0]
+    best_throughput = 0.0
+    
+    for batch_size in candidate_sizes:
+        try:
+            # Create dummy batch
+            dummy_input = torch.randn(batch_size, *sample_input_shape, device=device)
+            
+            # Warmup
+            with torch.no_grad():
+                _ = model(dummy_input)
+            
+            # Time a few iterations
+            torch.mps.synchronize() if device.type == "mps" else None
+            start_time = time.time()
+            n_iters = 3
+            
+            with torch.no_grad():
+                for _ in range(n_iters):
+                    _ = model(dummy_input)
+            
+            torch.mps.synchronize() if device.type == "mps" else None
+            elapsed = time.time() - start_time
+            
+            samples_per_sec = (batch_size * n_iters) / elapsed
+            
+            print(f"  Batch size {batch_size:2d}: {samples_per_sec:.1f} samples/sec - OK")
+            
+            if samples_per_sec > best_throughput:
+                best_throughput = samples_per_sec
+                best_size = batch_size
+            
+            # Clean up
+            del dummy_input
+            torch.mps.empty_cache() if device.type == "mps" else None
+            
+        except RuntimeError as e:
+            if "out of memory" in str(e).lower() or "memory" in str(e).lower():
+                print(f"  Batch size {batch_size:2d}: Memory allocation failed - stopping")
+                break
+            else:
+                print(f"  Batch size {batch_size:2d}: Error ({str(e)[:50]}) - stopping")
+                break
+        except Exception as e:
+            print(f"  Batch size {batch_size:2d}: Unexpected error - stopping")
+            break
+    
+    print(f"\nSelected batch size: {best_size} ({best_throughput:.1f} samples/sec)")
+    return best_size
+
+
+def quick_worker_probe(dataset, batch_size, worker_candidates=[0, 2]):
+    """
+    Quick worker count check.
+    Tests 0 vs 2 workers, picks faster. Falls back to 0 on errors.
+    
+    Args:
+        dataset: Dataset to test
+        batch_size: Batch size to use
+        worker_candidates: Worker counts to test
+        
+    Returns:
+        Best num_workers (int)
+    """
+    print("\nQuick worker count probe...")
+    
+    best_workers = 0
+    best_time = float('inf')
+    
+    for num_workers in worker_candidates:
+        try:
+            from torch.utils.data import DataLoader
+            
+            # Test small number of batches
+            n_batches = min(5, len(dataset) // batch_size)
+            if n_batches == 0:
+                print(f"  Workers {num_workers}: Not enough data for testing")
+                continue
+            
+            loader = DataLoader(
+                dataset,
+                batch_size=batch_size,
+                shuffle=False,
+                num_workers=num_workers,
+                pin_memory=(num_workers > 0),
+                persistent_workers=(num_workers > 0),
+                drop_last=False,
+                timeout=10 if num_workers > 0 else 0
+            )
+            
+            start_time = time.time()
+            batches_loaded = 0
+            
+            for i, batch in enumerate(loader):
+                if i >= n_batches:
+                    break
+                batches_loaded += 1
+            
+            elapsed = time.time() - start_time
+            
+            if batches_loaded > 0:
+                time_per_batch = elapsed / batches_loaded
+                print(f"  Workers {num_workers}: {time_per_batch*1000:.1f} ms/batch - OK")
+                
+                if elapsed < best_time:
+                    best_time = elapsed
+                    best_workers = num_workers
+            
+        except Exception as e:
+            print(f"  Workers {num_workers}: Error ({str(e)[:50]}) - skipping")
+            continue
+    
+    print(f"\nSelected num_workers: {best_workers}")
+    return best_workers
+
+
+def auto_select_device(hw_info):
+    """Select best device based on hardware detection."""
+    if hw_info["mps"]:
+        device = torch.device("mps")
+        print(f"\n[Device] Using: MPS (Apple Silicon GPU)")
+    elif hw_info["cuda"]:
+        device = torch.device("cuda")
+        print(f"\n[Device] Using: CUDA")
+    else:
+        device = torch.device("cpu")
+        print(f"\n[Device] Using: CPU (no GPU acceleration)")
+    
+    return device
 
 from seaice_forecast.config import load_config, resolve_paths, get_project_root
 from seaice_forecast.models.unet import UNet, create_unet_from_config
@@ -156,25 +356,24 @@ def main():
     # Override config with command line args
     if args.epochs:
         config['training']['epochs'] = args.epochs
-    if args.batch_size:
-        config['training']['batch_size'] = args.batch_size
     if args.learning_rate:
         config['training']['learning_rate'] = args.learning_rate
     if args.device:
         config['compute']['device'] = args.device
-
-    # Set device
-    device = config['compute']['device']
-    if device == 'cuda' and not torch.cuda.is_available():
-        if torch.backends.mps.is_available():
-            logger.info("CUDA not available, using Apple Silicon MPS device")
-            device = 'mps'
-        else:
-            logger.warning("CUDA not available, falling back to CPU")
-            device = 'cpu'
-    elif device == 'mps' and not torch.backends.mps.is_available():
-        logger.warning("MPS not available, falling back to CPU")
-        device = 'cpu'
+    
+    # =============================================================================
+    # AUTO-DETECTION: Hardware, Device, Batch Size, Workers
+    # =============================================================================
+    
+    print("\n")
+    hw_info = detect_hardware()
+    
+    # Auto-select device (or use command-line override)
+    if args.device:
+        device = torch.device(args.device)
+        print(f"\n[Device] Using command-line override: {device}")
+    else:
+        device = auto_select_device(hw_info)
 
     logger.info("="*80)
     logger.info("PHASE 2: ENVIRONMENTAL U-NET TRAINING")
@@ -182,14 +381,22 @@ def main():
     logger.info(f"Model: {config['model']['name']}")
     logger.info(f"Phase: {config['model']['phase']}")
     logger.info(f"Input: {config['architecture']['input_description']}")
-    logger.info(f"Device: {device}")
     logger.info(f"Epochs: {config['training']['epochs']}")
-    logger.info(f"Batch size: {config['training']['batch_size']}")
     logger.info(f"Learning rate: {config['training']['learning_rate']}")
     logger.info("")
     logger.info("Environmental variables:")
     for var in config['environmental_forcing']['variables']:
         logger.info(f"  - {var}")
+    logger.info(f"\nTrain: {len(train_loader.dataset)} samples, {len(train_loader)} batches")
+    logger.info(f"Val: {len(val_loader.dataset)} samples, {len(val_loader)} batches")
+    
+    # Show channel organization
+    sample_dataset = train_loader.dataset
+    if hasattr(sample_dataset, 'get_channel_info'):
+        channel_info = sample_dataset.get_channel_info()
+        logger.info("\nChannel organization:")
+        for var, info in channel_info.items():
+            logger.info(f"  {var}: channels {info['start']}-{info['end']-1}")
 
     # Setup directories
     project_root = get_project_root()
@@ -232,28 +439,6 @@ def main():
         logger.warning("No mask found, training on all pixels")
         mask = None
 
-    # Create Phase 2 dataloaders
-    logger.info("\nCreating Phase 2 dataloaders...")
-    dataloaders = create_phase2_dataloaders(config, mask, data_dir)
-
-    if 'train' not in dataloaders or 'val' not in dataloaders:
-        logger.error("Failed to create train and validation dataloaders")
-        return
-
-    train_loader = dataloaders['train']
-    val_loader = dataloaders['val']
-
-    logger.info(f"Train: {len(train_loader.dataset)} samples, {len(train_loader)} batches")
-    logger.info(f"Val: {len(val_loader.dataset)} samples, {len(val_loader)} batches")
-
-    # Show channel organization
-    sample_dataset = train_loader.dataset
-    if hasattr(sample_dataset, 'get_channel_info'):
-        channel_info = sample_dataset.get_channel_info()
-        logger.info("\nChannel organization:")
-        for var, info in channel_info.items():
-            logger.info(f"  {var}: channels {info['start']}-{info['end']-1}")
-
     # Create model with 49 input channels
     logger.info("\nCreating Environmental U-Net model...")
     logger.info("Architecture: Same as Phase 1 (encoder-decoder with skip connections)")
@@ -284,6 +469,88 @@ def main():
     logger.info(f"  Phase 2 (49 channels): {params['total']:,} parameters")
     logger.info(f"  Increase: {params['total'] - 2_300_000:,} parameters")
     logger.info(f"  (Increase primarily in first conv layer: 7→49 channels)")
+    
+    # =============================================================================
+    # AUTO-TUNE: Batch size and num_workers
+    # =============================================================================
+    
+    # Move model to device for batch size probing
+    model.to(device)
+    
+    # Phase 2: 49 channels (7 days × 7 variables) - larger memory footprint than Phase 1
+    sample_h, sample_w = 316, 332  # Antarctic grid size
+    
+    # Quick batch size probe (unless explicitly overridden by command line)
+    if args.batch_size:
+        optimized_batch_size = args.batch_size
+        print(f"\n[Batch Size] Using command-line override: {optimized_batch_size}")
+    else:
+        print("\n[Phase 2 Note] Testing batch sizes with 49-channel input (larger than Phase 1's 7 channels)")
+        optimized_batch_size = quick_batch_size_probe(
+            model=model,
+            sample_input_shape=(49, sample_h, sample_w),
+            device=device,
+            candidate_sizes=[2, 4, 8, 16]  # May settle lower than Phase 1 due to 7x more channels
+        )
+    
+    # Update config with optimized batch size
+    config['training']['batch_size'] = optimized_batch_size
+    
+    # Create Phase 2 dataloaders
+    logger.info("\nCreating Phase 2 dataloaders...")
+    dataloaders = create_phase2_dataloaders(config, mask, data_dir)
+
+    if 'train' not in dataloaders or 'val' not in dataloaders:
+        logger.error("Failed to create train and validation dataloaders")
+        return
+
+    train_loader = dataloaders['train']
+    val_loader = dataloaders['val']
+    
+    # Quick worker count probe on training dataset
+    optimized_num_workers = quick_worker_probe(
+        dataset=train_loader.dataset,
+        batch_size=optimized_batch_size,
+        worker_candidates=[0, 2]
+    )
+    
+    # Recreate dataloaders with optimized worker count
+    if optimized_num_workers != 0:
+        logger.info(f"\nRecreating dataloaders with optimized num_workers={optimized_num_workers}...")
+        from torch.utils.data import DataLoader
+        
+        train_loader = DataLoader(
+            train_loader.dataset,
+            batch_size=optimized_batch_size,
+            shuffle=True,
+            num_workers=optimized_num_workers,
+            pin_memory=True,
+            persistent_workers=True,
+            drop_last=True
+        )
+        
+        val_loader = DataLoader(
+            val_loader.dataset,
+            batch_size=optimized_batch_size,
+            shuffle=False,
+            num_workers=optimized_num_workers,
+            pin_memory=True,
+            persistent_workers=True,
+            drop_last=False
+        )
+    
+    # =============================================================================
+    # Print final optimized settings
+    # =============================================================================
+    
+    print("\n" + "=" * 70)
+    print("OPTIMIZED TRAINING SETTINGS (PHASE 2: 49 CHANNELS)")
+    print("=" * 70)
+    print(f"Device:           {device}")
+    print(f"Batch Size:       {optimized_batch_size}")
+    print(f"Num Workers:      {optimized_num_workers}")
+    print(f"Precision:        fp32 (stable default)")
+    print("=" * 70)
 
     # Create trainer
     logger.info("\nInitializing trainer...")
