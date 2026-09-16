@@ -139,6 +139,17 @@ class AntarcticGrid:
                     reference_nc_path = c
                     break
 
+            # Fall back to any downloaded NSIDC daily file (data/data/sic/{YYYY}/*.nc).
+            # The CDR land mask is static, so any single day is a valid reference.
+            if reference_nc_path is None:
+                for sic_root in (self.cache_dir.parent / "data" / "sic",
+                                 self.cache_dir.parent / "sic"):
+                    if sic_root.is_dir():
+                        found = sorted(sic_root.glob("*/sic_*.nc"))
+                        if found:
+                            reference_nc_path = found[0]
+                            break
+
         if reference_nc_path is None or not Path(reference_nc_path).exists():
             raise FileNotFoundError(
                 f"Cannot build ground-truth land/ocean mask: reference NSIDC NetCDF not found at {reference_nc_path}. "

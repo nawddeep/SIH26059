@@ -175,6 +175,15 @@ class RealSeaIceDataset(Dataset):
                     if std > 1e-6:
                         input_stack[:, c_idx] = (input_stack[:, c_idx] - mean) / std
 
+            # Land cells carry fill values (0.0), not physical measurements. The
+            # stats are ocean-only, so normalising a land 0 in an absolute-Kelvin
+            # channel gives (0 - 274.5)/2.57 ~= -107: a huge artificial outlier
+            # over ~21% of the grid. Reset land to 0, i.e. the normalised mean,
+            # so masked-out cells stay neutral instead of dominating the input.
+            if self.mask is not None:
+                land = (self.mask == 0)
+                input_stack[:, 1:, land] = 0.0
+
         # Target: SIC only (channel index 0) from the forecast horizon day
         target_bundle = self._load_daily_array(target_file)
         target_sic = target_bundle[0:1]  # [1, H, W]

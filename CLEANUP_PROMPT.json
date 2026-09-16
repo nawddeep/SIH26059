@@ -1,0 +1,119 @@
+{
+  "task": "Clean junk and stale files from the iceberg_models repository",
+  "repo_root": "/Users/nawdddep/Documents/iceberg_models/iceberg_models-main",
+
+  "critical_rules": [
+    "This repo contains 82 GB of irreplaceable downloaded data and a trained model. Re-downloading takes many hours (ERA5 goes through a queue).",
+    "NEVER delete anything under seaice_forecast/data/ unless it is explicitly named in delete_safe below.",
+    "NEVER delete anything under seaice_forecast/models/checkpoints/ - that is the trained model.",
+    "NEVER delete any venv/ directory.",
+    "Run `git status` before deleting. If a file is modified-but-uncommitted, leave it and report it.",
+    "Print the total size of everything you plan to delete, and wait for confirmation before deleting more than 100 MB.",
+    "Move to a quarantine folder first (see procedure). Do not use `rm -rf` directly on anything except the always-safe patterns."
+  ],
+
+  "delete_safe": {
+    "description": "Remove these without asking. Zero risk.",
+    "patterns": [
+      {"glob": "**/.DS_Store", "count": 14, "reason": "macOS metadata"},
+      {"glob": "**/__pycache__/", "reason": "Python bytecode cache"},
+      {"glob": "**/*.pyc", "reason": "Python bytecode"},
+      {"glob": "**/nohup.out", "reason": "stray process output"},
+      {"glob": "**/*.tmp", "reason": "interrupted-download temp files"},
+      {"glob": "**/*.raw.nc", "reason": "intermediate ERA5 download artifacts"},
+      {"glob": "**/*.tmp.nc", "reason": "intermediate NetCDF temp files"},
+      {"glob": "**/*.csv#", "reason": "editor backup file"}
+    ]
+  },
+
+  "delete_after_check": {
+    "description": "Almost certainly junk, but verify each is not referenced by any script before removing. Grep the repo for the filename first.",
+    "items": [
+      {"path": "path/", "size": "4K", "reason": "Stray directory containing only path/to/commit_message.txt - an accidental `mkdir path/to/...`"},
+      {"path": "src/", "size": "4K", "reason": "Stray root-level src/index.js - unrelated to this Python project. NOTE: do NOT confuse with seaice_forecast/src/ which is the real package."},
+      {"path": "seaice_forecast/cmems_mod_glo_phy_my_*.nc", "reason": "Two single-day CMEMS test downloads left in the project root. The real currents data lives in seaice_forecast/data/data/{YYYY}/."},
+      {"path": "seaice_forecast/baseline_evaluation_output.txt", "reason": "Stale evaluation dump, superseded by output/evaluation/baseline_comparison.json"},
+      {"path": "seaice_forecast/post_reorg_evaluation_output.txt", "reason": "Stale evaluation dump from an earlier reorganisation"},
+      {"path": "seaice_forecast/data/data/raw/copernicus/cmems_currents_test_2024.nc", "size": "2.3G", "reason": "Superseded test download. Confirm size before deleting; this is the largest single reclaim."}
+    ]
+  },
+
+  "consolidate_docs": {
+    "description": "Many overlapping status/instruction markdown files accumulated. Do NOT delete them - move them to docs/archive/ and leave a single current README.",
+    "keep_in_place": [
+      "seaice_forecast/OPEN_PROBLEM.md",
+      "seaice_forecast/README.md",
+      "ICEBERG_DRIFT_TRAINING_PROMPT.md"
+    ],
+    "archive_to": "docs/archive/",
+    "candidates": [
+      "REORGANIZATION_FINAL_REPORT.md",
+      "VERIFICATION_RESULTS.md",
+      "START_HERE.md",
+      "seaice_forecast/DOWNLOAD_COMPLETE_REPORT.md",
+      "seaice_forecast/DOWNLOAD_STATUS_AND_INSTRUCTIONS.md",
+      "seaice_forecast/DOWNLOAD_SIC_DATA.md",
+      "seaice_forecast/KIRO_DATA_DOWNLOAD_PROMPT.md",
+      "seaice_forecast/QUICK_START_SIC_DOWNLOAD.txt",
+      "seaice_forecast/checklist.md"
+    ]
+  },
+
+  "security": {
+    "description": "Handle before any commit.",
+    "items": [
+      {
+        "path": "qwen_chat.py",
+        "issue": "Contains a hardcoded API key (sk-...) for an internal LLM endpoint, and is NOT gitignored. A `git add .` would commit the credential.",
+        "action": "Add 'qwen_chat.py' and '.env' to .gitignore. Replace the literal key with os.environ['QWEN_API_KEY']. Do not delete the file."
+      }
+    ]
+  },
+
+  "never_touch": [
+    "seaice_forecast/data/processed/**  (6.2 GB - the training set; deleting it means retraining is impossible)",
+    "seaice_forecast/data/data/{2008..2018}/**  (46 GB currents - hours to re-download)",
+    "seaice_forecast/data/data/sic/**  (3,880 NSIDC files)",
+    "seaice_forecast/data/data/raw/era5/**  (132 months, downloaded through a slow CDS queue)",
+    "seaice_forecast/data/data/raw/iceberg_positions/**  (1,543 tracks - needed for the drift model)",
+    "seaice_forecast/models/checkpoints/**  (the trained model and its backup)",
+    "**/venv/**",
+    ".git/**"
+  ],
+
+  "gitignore_additions": [
+    ".DS_Store",
+    "__pycache__/",
+    "*.pyc",
+    "venv/",
+    "qwen_chat.py",
+    ".env",
+    "*.tmp",
+    "*.raw.nc",
+    "nohup.out",
+    "logs/",
+    "data/",
+    "models/checkpoints/*.pt"
+  ],
+
+  "procedure": [
+    "1. Run `git status` and record anything uncommitted.",
+    "2. Create a quarantine dir: `_quarantine_$(date +%Y%m%d)/`",
+    "3. Delete the always-safe patterns directly (delete_safe).",
+    "4. For each item in delete_after_check: grep the repo for its basename. If referenced by any .py/.sh/.yaml, SKIP it and report. Otherwise MOVE it to quarantine.",
+    "5. Move the consolidate_docs candidates into docs/archive/.",
+    "6. Apply gitignore_additions (append, do not overwrite existing entries).",
+    "7. Fix the qwen_chat.py credential.",
+    "8. Print a summary table: file, action taken, size reclaimed.",
+    "9. Tell the user to verify the project still works, then delete the quarantine folder manually."
+  ],
+
+  "verification_after_cleanup": [
+    "seaice_forecast/venv/bin/python -m pytest seaice_forecast/tests/ -q   # expect 30 passed",
+    "ls seaice_forecast/models/checkpoints/phase3/*.pt                      # model still present",
+    "find seaice_forecast/data/processed/regridded/daily -name '*.npz' | wc -l   # expect 3880",
+    "df -h ~ | tail -1                                                      # report space reclaimed"
+  ],
+
+  "report_back": "A table of what was deleted, what was archived, what was skipped and why, total space reclaimed, and confirmation that all 4 verification checks passed."
+}

@@ -122,6 +122,8 @@ class TemporalTrainer:
         n_batches = 0
         epoch_steps = 0
         epoch_clips = 0
+        skipped_loss = 0
+        skipped_grad = 0
 
         for inputs, targets in dataloader:
             inputs = inputs.to(self.device, non_blocking=True)
@@ -134,9 +136,42 @@ class TemporalTrainer:
             mask = self.mask if self.mask is not None else torch.ones_like(targets)
             loss = self.criterion(outputs, targets, mask)
 
+            # Guard 1: never backprop a non-finite OR physically impossible loss.
+            #
+            # The output head is a sigmoid and targets are SIC in [0, 1], so a
+            # masked MAE is mathematically bounded by 1.0 (verified directly).
+            # Values above that - we observed 1e10 to 1e19 - are numerical
+            # artifacts, not real losses. Left in, a single such batch poisons
+            # the epoch average and drives the LR scheduler and checkpoint
+            # selection off a cliff.
+            # Training: skip only NON-FINITE losses. A >1.0 bound here starved
+            # learning - it rejected 96% of batches - so the occasional inflated
+            # value is tolerated in the gradient signal. Validation applies the
+            # strict bound instead, which is what model selection depends on.
+            if not torch.isfinite(loss):
+                skipped_loss += 1
+                self.optimizer.zero_grad(set_to_none=True)
+                continue
+
             loss.backward()
 
-            # Stability safeguard: gradient clipping
+            # Guard 2: never step on a non-finite gradient.
+            #
+            # clip_grad_norm_ turns an Inf gradient into NaN WEIGHTS rather than
+            # clipping it: clip_coef = max_norm / (total_norm + 1e-6) is 0 when
+            # total_norm is Inf, and Inf * 0 = NaN. One bad batch then poisons
+            # every parameter permanently and the whole run reports NaN. Measure
+            # the norm first, skip the batch if it is not finite, and only then
+            # clip. Rare spikes cost a couple of batches per epoch; without this
+            # they cost the entire run.
+            total_norm = torch.nn.utils.clip_grad_norm_(
+                self.model.parameters(), float("inf")
+            )
+            if not torch.isfinite(total_norm):
+                skipped_grad += 1
+                self.optimizer.zero_grad(set_to_none=True)
+                continue
+
             if self.grad_clip_norm > 0:
                 norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip_norm)
                 if norm > self.grad_clip_norm:
@@ -152,6 +187,12 @@ class TemporalTrainer:
 
         avg_loss = total_loss / max(1, n_batches)
         clip_freq = epoch_clips / max(1, epoch_steps)
+        if skipped_loss or skipped_grad:
+            total_seen = skipped_loss + skipped_grad + n_batches
+            logger.warning(
+                "Skipped %d/%d batches: %d non-finite LOSS, %d non-finite GRADIENT.",
+                skipped_loss + skipped_grad, total_seen, skipped_loss, skipped_grad,
+            )
         return avg_loss, clip_freq
 
     def validate(self, dataloader: DataLoader) -> float:
@@ -161,6 +202,7 @@ class TemporalTrainer:
         self.model.eval()
         total_loss = 0.0
         n_batches = 0
+        val_skipped = 0
 
         with torch.no_grad():
             for inputs, targets in dataloader:
@@ -171,9 +213,19 @@ class TemporalTrainer:
                 mask = self.mask if self.mask is not None else torch.ones_like(targets)
                 loss = self.criterion(outputs, targets, mask)
 
+                # A single non-finite batch would otherwise turn the whole
+                # validation average into NaN, which then never compares as an
+                # improvement - so no best checkpoint is ever saved, the LR
+                # scheduler sees NaN, and early stopping is driven by garbage.
+                if not torch.isfinite(loss) or loss.item() > 1.0:
+                    val_skipped += 1
+                    continue
+
                 total_loss += loss.item()
                 n_batches += 1
 
+        if val_skipped:
+            logger.warning("Validation skipped %d non-finite batches.", val_skipped)
         return total_loss / max(1, n_batches)
 
     def save_checkpoint(self, epoch: int, is_best: bool = False):

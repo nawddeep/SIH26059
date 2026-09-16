@@ -387,16 +387,6 @@ def main():
     logger.info("Environmental variables:")
     for var in config['environmental_forcing']['variables']:
         logger.info(f"  - {var}")
-    logger.info(f"\nTrain: {len(train_loader.dataset)} samples, {len(train_loader)} batches")
-    logger.info(f"Val: {len(val_loader.dataset)} samples, {len(val_loader)} batches")
-    
-    # Show channel organization
-    sample_dataset = train_loader.dataset
-    if hasattr(sample_dataset, 'get_channel_info'):
-        channel_info = sample_dataset.get_channel_info()
-        logger.info("\nChannel organization:")
-        for var, info in channel_info.items():
-            logger.info(f"  {var}: channels {info['start']}-{info['end']-1}")
 
     # Setup directories
     project_root = get_project_root()
@@ -506,6 +496,17 @@ def main():
 
     train_loader = dataloaders['train']
     val_loader = dataloaders['val']
+
+    logger.info(f"\nTrain: {len(train_loader.dataset)} samples, {len(train_loader)} batches")
+    logger.info(f"Val: {len(val_loader.dataset)} samples, {len(val_loader)} batches")
+    
+    # Show channel organization
+    sample_dataset = train_loader.dataset
+    if hasattr(sample_dataset, 'get_channel_info'):
+        channel_info = sample_dataset.get_channel_info()
+        logger.info("\nChannel organization:")
+        for var, info in channel_info.items():
+            logger.info(f"  {var}: channels {info['start']}-{info['end']-1}")
     
     # Quick worker count probe on training dataset
     optimized_num_workers = quick_worker_probe(

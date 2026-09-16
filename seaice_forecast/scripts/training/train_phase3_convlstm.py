@@ -291,6 +291,23 @@ def parse_args():
         help="Spatial dropout rate."
     )
     parser.add_argument(
+        "--residual",
+        action="store_true",
+        help="Predict the day-on-day CHANGE in SIC and add it to today's field. "
+             "A zero output then equals persistence, so training starts at "
+             "persistence-level skill instead of relearning the field through "
+             "the U-Net bottleneck. Strongly recommended.",
+    )
+    parser.add_argument(
+        "--encoder-channels",
+        type=int,
+        nargs="+",
+        default=[32, 64, 128, 256],
+        help="U-Net encoder widths. Smaller is much faster on MPS: "
+             "[16 32 64 128] is ~3x the throughput of [32 64 128 256] "
+             "and is better matched to ~2.4k training samples.",
+    )
+    parser.add_argument(
         "--device",
         type=str,
         default=None,
@@ -373,22 +390,79 @@ def main():
         )
         sys.exit(1)
 
-    # Train / Val split
-    if total_samples > 10:
-        val_size = max(2, int(total_samples * 0.2))
-        train_size = total_samples - val_size
-        train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
+    # Train / Val split — CHRONOLOGICAL, never random.
+    #
+    # random_split() leaks: samples are overlapping sliding windows (stride=1),
+    # so a val window starting on day N shares input days with train windows
+    # starting on days N-6..N-1, and its target day is an input day of its
+    # neighbours. That makes val loss optimistic and the reported skill invalid.
+    # Split by date instead, so val/test are strictly in the future of train.
+    _cfg_dates = {}
+    try:
+        import yaml
+        _cfg_path = Path(__file__).resolve().parents[2] / "src/seaice_forecast/config/settings.yaml"
+        _cfg_dates = yaml.safe_load(open(_cfg_path))["data"]["date_ranges"]
+    except Exception as _e:
+        logger.warning("Could not read date_ranges from settings.yaml (%s); using defaults.", _e)
+        _cfg_dates = {"train_start": "2008-01-01", "train_end": "2015-12-31",
+                      "val_start": "2016-01-01", "val_end": "2016-12-31"}
+
+    # Normalisation. The environmental channels live on wildly different scales
+    # (SIC is 0-1; air_temp and sst are absolute Kelvin, ~235-285). Feeding raw
+    # Kelvin into the network alongside a 0-1 target makes the first layers see
+    # inputs ~270x the target scale, which blows the gradients up - at lr 1e-3
+    # that produced NaN losses within one epoch. The stats are computed over the
+    # TRAIN split only (by scripts/data/build_daily_npz.py) so this leaks nothing.
+    _stats_path = Path(args.data_dir).resolve().parents[1] / "normalization_stats.json"
+    _norm_stats = None
+    if _stats_path.exists():
+        _norm_stats = json.loads(_stats_path.read_text())
+        logger.info("Loaded normalisation stats from %s", _stats_path)
     else:
-        # For small smoke tests, use same dataset for train and val
-        train_dataset = dataset
-        val_dataset = dataset
+        logger.warning(
+            "No normalization_stats.json at %s - training on RAW inputs. "
+            "Expect divergence: air_temp/sst are absolute Kelvin.", _stats_path
+        )
+
+    def _make(split_start, split_end):
+        return RealSeaIceDataset(
+            daily_data_dir=args.data_dir,
+            start_date=split_start,
+            end_date=split_end,
+            input_window=input_window,
+            forecast_horizon=1,
+            channel_concat=False,
+            phase="phase2",
+            normalization_stats=_norm_stats,
+            mask_path=mask_file if mask_file.exists() else None,
+        )
+
+    train_dataset = _make(_cfg_dates["train_start"], _cfg_dates["train_end"])
+    val_dataset = _make(_cfg_dates["val_start"], _cfg_dates["val_end"])
+
+    if len(train_dataset) == 0 or len(val_dataset) == 0:
+        logger.warning(
+            "Chronological split produced train=%d val=%d; falling back to a "
+            "chronological 80/20 cut of the full index (still no shuffling).",
+            len(train_dataset), len(val_dataset),
+        )
+        cut = max(1, int(total_samples * 0.8))
+        train_dataset = torch.utils.data.Subset(dataset, list(range(cut)))
+        val_dataset = torch.utils.data.Subset(dataset, list(range(cut, total_samples)))
+
+    logger.info(
+        "Chronological split -> train %d samples (%s..%s) | val %d samples (%s..%s)",
+        len(train_dataset), _cfg_dates["train_start"], _cfg_dates["train_end"],
+        len(val_dataset), _cfg_dates["val_start"], _cfg_dates["val_end"],
+    )
 
     # 3. Instantiate model
     model = UNetConvLSTM(
         in_channels=7,
         output_channels=1,
         seq_len=input_window,
-        encoder_channels=[32, 64, 128, 256],
+        encoder_channels=args.encoder_channels,
+        residual=args.residual,
         convlstm_layers=1,
         dropout=args.dropout,
         output_activation="sigmoid"

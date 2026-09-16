@@ -1,0 +1,78 @@
+data_sources:
+  bathymetry:
+    local_path: /Users/pratiksmac/Downloads/data/raw/bathymetry/IBCSO_v2_bed_WGS84.nc
+    source: IBCSO_v2
+  era5_wind:
+    variable: 10m_wind
+  iceberg_positions:
+    end_date: '2024-12-31'
+    local_path: /Users/pratiksmac/Downloads/data
+    min_length_m: 100
+    source: BYU
+    start_date: '2024-01-01'
+  ocean_currents:
+    variable: surface_currents
+evaluation:
+  baseline_comparison: true
+  bootstrap_samples: 10
+  confidence_level: 0.95
+  metric_horizons:
+  - 6
+  - 12
+model:
+  ml_correction:
+    dropout: 0.1
+    hidden_dim: 64
+    loss_weights:
+      boundary: 0.1
+      physics: 0.5
+    num_layers: 2
+    prediction_horizon: 6
+    sequence_length: 24
+  pinn:
+    boundary_weight: 0.1
+    coriolis_alpha: 0.015
+    physics_weight: 0.5
+    wind_factor: 0.02
+  type: pinn
+paths:
+  logs: output/logs
+  models: output/checkpoints
+  processed_data: output/processed
+  raw_data: /Users/pratiksmac/Downloads/data
+  results: output/results
+training:
+  batch_size: 32
+  early_stopping_metric: val_loss
+  early_stopping_patience: 5
+  epochs: 100
+  gradient_clip: 1.0
+  learning_rate: 0.001
+  log_interval: 1
+  metric_horizons:
+  - 6
+  - 12
+  optimizer: adamw
+  random_seed: 42
+  save_interval: 2
+  scheduler: cosine
+  scheduler_params:
+    eta_min: 1e-6
+  teacher_forcing:
+    decay: linear
+    final: 0.0
+    initial: 0.5
+  test_split: 0.15
+  train_split: 0.7
+  use_amp: false
+  val_split: 0.15
+  validate_every: 1
+  weight_decay: 1e-5
+visualization:
+  dpi: 100
+  figure_size:
+  - 10
+  - 6
+  plot_style: seaborn-v0_8
+  save_format:
+  - png

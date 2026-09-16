@@ -1,0 +1,151 @@
+╔══════════════════════════════════════════════════════════════════════╗
+║              DOWNLOAD SIC DATA - QUICK START GUIDE                    ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+⚠️  CRITICAL: Your training is BLOCKED until you download SIC data!
+
+═══════════════════════════════════════════════════════════════════════
+
+STEP 1: CREATE NASA EARTHDATA ACCOUNT (2 minutes)
+──────────────────────────────────────────────────
+
+Go to: https://urs.earthdata.nasa.gov/users/new
+
+Fill in:
+  - Username
+  - Email
+  - Password
+
+Verify your email → Account ready!
+
+═══════════════════════════════════════════════════════════════════════
+
+STEP 2: INSTALL DOWNLOAD TOOL (30 seconds)
+───────────────────────────────────────────
+
+cd ~/Documents/iceberg_models/iceberg_models-main/seaice_forecast
+pip install earthaccess
+
+═══════════════════════════════════════════════════════════════════════
+
+STEP 3: RUN DOWNLOAD SCRIPT (1-3 hours)
+────────────────────────────────────────
+
+python scripts/download_sic_data.py --start-year 2008 --end-year 2026
+
+When prompted:
+  Username: [your NASA Earthdata username]
+  Password: [your NASA Earthdata password]
+
+The script will:
+  ✓ Download 19 years of daily sea-ice data (2008-2026)
+  ✓ Save to: data/data/sic/YYYY/
+  ✓ Total size: ~1-2 GB
+  ✓ Show progress for each year
+
+═══════════════════════════════════════════════════════════════════════
+
+STEP 4: VERIFY DOWNLOAD
+────────────────────────
+
+# Check files exist
+ls -lh data/data/sic/2015/
+
+# Should see files like:
+# seaice_conc_daily_sh_20150101_v04r00.nc
+# seaice_conc_daily_sh_20150102_v04r00.nc
+# ... (365 files)
+
+# Verify all years
+python scripts/download_sic_data.py --verify-only
+
+═══════════════════════════════════════════════════════════════════════
+
+STEP 5: PREPARE DATA FOR TRAINING
+───────────────────────────────────
+
+python scripts/prepare_data.py
+
+This creates:
+  ✓ train_data.npz
+  ✓ val_data.npz
+  ✓ land_ocean_mask.npy
+
+═══════════════════════════════════════════════════════════════════════
+
+STEP 6: START TRAINING!
+────────────────────────
+
+python scripts/training/train_phase1.py --epochs 50
+
+✓ NOW YOU CAN TRAIN!
+
+═══════════════════════════════════════════════════════════════════════
+
+TROUBLESHOOTING
+───────────────
+
+Problem: "Authentication failed"
+Solution: 
+  1. Check username/password
+  2. Verify email is confirmed
+  3. Clear cache: rm -rf ~/.netrc ~/.urs_cookies
+  4. Try again
+
+Problem: "earthaccess not found"
+Solution: pip install earthaccess
+
+Problem: Download very slow
+Solution: 
+  - Download fewer years at a time
+  - Check internet connection
+  - Try different time of day (NSIDC server load)
+
+Problem: Some years missing
+Solution:
+  - Recent years (2025-2026) may not be available yet
+  - Download what's available and train on that
+
+═══════════════════════════════════════════════════════════════════════
+
+ALTERNATIVE: MANUAL DOWNLOAD
+─────────────────────────────
+
+If script doesn't work:
+
+1. Go to: https://nsidc.org/data/nsidc-0051
+2. Click "Access Data"
+3. Login with Earthdata credentials
+4. Select:
+   - Hemisphere: Southern
+   - Date range: 2008-01-01 to 2026-12-31
+   - Format: NetCDF
+5. Download files
+6. Save to: data/data/sic/YYYY/
+
+═══════════════════════════════════════════════════════════════════════
+
+QUICK COMMANDS (copy-paste)
+────────────────────────────
+
+# Full setup
+pip install earthaccess
+cd ~/Documents/iceberg_models/iceberg_models-main/seaice_forecast
+python scripts/download_sic_data.py --start-year 2008 --end-year 2026
+
+# Just verify existing
+python scripts/download_sic_data.py --verify-only
+
+# Download one year only (testing)
+python scripts/download_sic_data.py --start-year 2015 --end-year 2015
+
+═══════════════════════════════════════════════════════════════════════
+
+HELP
+────
+
+Full documentation: DOWNLOAD_SIC_DATA.md
+Script help: python scripts/download_sic_data.py --help
+NSIDC support: nsidc@nsidc.org
+
+═══════════════════════════════════════════════════════════════════════

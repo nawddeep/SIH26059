@@ -1,0 +1,40 @@
+# Configuration for iceberg drift model
+
+paths:
+  raw_data: "data"  # Path where raw data is stored locally
+  processed_data: "output/processed"  # Path to save processed datasets
+  models: "output/models"  # Path to save trained models
+  results: "output/results"  # Path to save evaluation results
+
+data:
+  train_start: "2024-01-01"
+  train_end: "2024-01-31"
+  val_start: "2024-02-01"
+  val_end: "2024-02-15"
+  test_start: "2024-02-15"
+  test_end: "2024-02-28"
+  source: "NIC"  # Switch to NIC for actual testing, since BYU might be sparse
+  min_length_m: 100
+
+model:
+  type: "pinn"  # Options: lstm, transformer, pinn
+  sequence_length: 24  # Lookback window (144 hours = 6 days)
+  
+  ml_correction:
+    hidden_dims: [128, 64, 32]
+    dropout: 0.1
+    prediction_horizon: 24  # Predict next 24 time steps (6 days)
+    
+  pinn:
+    physics_weight: 0.5
+    data_weight: 1.0
+    boundary_weight: 0.1
+    wind_factor: 0.02
+    coriolis_alpha: 0.1
+
+training:
+  batch_size: 16
+  epochs: 2  # Very short for test
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  early_stopping_patience: 10

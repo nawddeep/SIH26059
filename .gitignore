@@ -1,1 +1,22 @@
 .DS_Store
+# Credentials - qwen_chat.py holds a live API key
+qwen_chat.py
+.env
+
+# Environments and caches
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+
+# Large artifacts (models are 94MB+, data is 82GB)
+*.pt
+*.pkl
+*.npz
+*.nc
+data/
+_removed_*/
+_quarantine_*/
+logs/
+nohup.out

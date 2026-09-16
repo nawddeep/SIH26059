@@ -303,8 +303,6 @@ def main():
     logger.info(f"Model: {config['model']['name']}")
     logger.info(f"Epochs: {config['training']['epochs']}")
     logger.info(f"Learning rate: {config['training']['learning_rate']}")
-    logger.info(f"Train: {len(train_loader.dataset)} samples, {len(train_loader)} batches")
-    logger.info(f"Val: {len(val_loader.dataset)} samples, {len(val_loader)} batches")
 
     # Check if processed data exists
     processed_dir = Path(config['data']['paths']['processed'])
@@ -374,6 +372,8 @@ def main():
 
     train_loader = dataloaders['train']
     val_loader = dataloaders['val']
+    logger.info(f"Train: {len(train_loader.dataset)} samples, {len(train_loader)} batches")
+    logger.info(f"Val: {len(val_loader.dataset)} samples, {len(val_loader)} batches")
     
     # Quick worker count probe on training dataset
     optimized_num_workers = quick_worker_probe(

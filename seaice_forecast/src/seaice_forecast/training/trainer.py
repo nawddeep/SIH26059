@@ -57,8 +57,13 @@ class MaskedMAELoss(nn.Module):
         # Compute absolute errors
         errors = torch.abs(predictions - targets)
 
-        # Apply mask (only ocean pixels)
-        masked_errors = errors * mask
+        # Apply mask (only ocean pixels).
+        # NOTE: use torch.where rather than `errors * mask` — multiplying by a
+        # zero mask does NOT neutralise NaN (IEEE 754: 0 * NaN = NaN), so any
+        # NaN under land would otherwise poison the whole scalar loss.
+        masked_errors = torch.where(
+            mask.bool(), errors, torch.zeros_like(errors)
+        )
 
         # Compute mean over ocean pixels only
         n_ocean_pixels = mask.sum()

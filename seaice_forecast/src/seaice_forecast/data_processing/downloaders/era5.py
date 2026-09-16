@@ -105,7 +105,8 @@ class ERA5Downloader:
             "month": f"{month:02d}",
             "day": day_strs,
             "time": times,
-            "format": "netcdf",
+            "data_format": "netcdf",
+            "download_format": "unarchived",
             "area": ANTARCTIC_AREA,
         }
 
@@ -116,7 +117,18 @@ class ERA5Downloader:
         last_err = None
         for attempt in range(1, max_retries + 1):
             try:
-                self.client.retrieve(ERA5_DATASET, request, str(tmp_raw))
+                try:
+                    self.client.retrieve(ERA5_DATASET, request, str(tmp_raw))
+                except Exception as req_err:
+                    # Fallback to legacy format parameter if new format rejected
+                    if "download_format" in str(req_err) or "data_format" in str(req_err):
+                        legacy_request = dict(request)
+                        legacy_request.pop("data_format", None)
+                        legacy_request.pop("download_format", None)
+                        legacy_request["format"] = "netcdf"
+                        self.client.retrieve(ERA5_DATASET, legacy_request, str(tmp_raw))
+                    else:
+                        raise req_err
 
                 if not tmp_raw.exists():
                     raise FileNotFoundError(f"CDS API completed but output file {tmp_raw} not found.")

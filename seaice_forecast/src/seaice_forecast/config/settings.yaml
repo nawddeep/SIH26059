@@ -18,20 +18,27 @@ data:
     version: 6
     base_url: "https://noaadata.apps.nsidc.org/NOAA/G02202_V6/south/daily"
 
-  # Date ranges — updated for 2024 real NSIDC CDR v6 data
+  # Date ranges — full circumpolar record (2008-2018).
+  # Chronological split: no shuffling across time, so val/test are strictly
+  # future relative to train (prevents temporal leakage).
+  #   train 8 yrs | val 1 yr | test 2 yrs
   date_ranges:
-    train_start: "2024-01-01"
-    train_end: "2024-09-30"
-    val_start: "2024-10-01"
-    val_end: "2024-11-30"
-    test_start: "2024-12-01"
-    test_end: "2024-12-31"
+    train_start: "2008-01-01"
+    train_end: "2015-12-31"
+    val_start: "2016-01-01"
+    val_end: "2016-12-31"
+    test_start: "2017-01-01"
+    test_end: "2018-12-31"
 
-  # Data paths
+  # Data paths (actual on-disk layout: note the doubled data/data/ prefix
+  # for raw sources, written by the download scripts)
   paths:
-    raw: "data/raw/real/nsidc"
+    raw: "data/data/sic"                  # NSIDC SIC:  data/data/sic/{YYYY}/*.nc
+    raw_era5: "data/data/raw/era5"        # ERA5:       data/data/raw/era5/{YYYY}/*.nc
+    raw_currents: "data/data"             # GLORYS:     data/data/{YYYY}/currents_GLORYS12_*.nc
     processed: "data/processed"
-    mask: "data/processed/land_ocean_mask.nc"
+    daily: "data/processed/regridded/daily"
+    mask: "data/processed/land_ocean_mask_ps25.npy"
 
 # Model architecture
 architecture:

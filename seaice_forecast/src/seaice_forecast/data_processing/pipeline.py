@@ -96,6 +96,8 @@ class DataPipeline:
             ],
             "completed_chunks": {},
             "total_days_processed": 0,
+            "yearly_summary": {},
+            "daily_coverage": {},
             "created_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat(),
         }
@@ -239,6 +241,7 @@ class DataPipeline:
                 era5_ds.close()
 
             # 5. Record completion in manifest
+            chunk_dates = [cur_date.strftime("%Y-%m-%d") for cur_date, _ in sic_files]
             chunk_record = {
                 "chunk_id": chunk_id,
                 "start_date": start_date.strftime("%Y-%m-%d"),
@@ -246,11 +249,66 @@ class DataPipeline:
                 "num_days": len(days_saved),
                 "completed_at": datetime.utcnow().isoformat(),
                 "file_size_bytes": sum(f.stat().st_size for f in days_saved),
+                "sources": {
+                    "nsidc": len(days_saved),
+                    "era5": len(days_saved),
+                    "cmems": len(days_saved),
+                },
+                "dates": chunk_dates,
+                "missing_dates": {
+                    "nsidc": [],
+                    "era5": [],
+                    "cmems": []
+                }
             }
+
+            if "yearly_summary" not in self.manifest:
+                self.manifest["yearly_summary"] = {}
+            if "daily_coverage" not in self.manifest:
+                self.manifest["daily_coverage"] = {}
+
+            for cur_date, _ in sic_files:
+                d_str = cur_date.strftime("%Y-%m-%d")
+                d_compact = cur_date.strftime("%Y%m%d")
+                self.manifest["daily_coverage"][d_str] = {
+                    "nsidc": True,
+                    "era5": True,
+                    "cmems": True,
+                    "file": f"daily/{cur_date.year}/{d_compact}.npz"
+                }
+
             self.manifest["completed_chunks"][chunk_id] = chunk_record
-            self.manifest["total_days_processed"] = sum(
-                c["num_days"] for c in self.manifest["completed_chunks"].values()
-            )
+            self.manifest["total_days_processed"] = len(self.manifest["daily_coverage"])
+
+            # Update yearly summary
+            years_covered = sorted(set(int(d[:4]) for d in self.manifest["daily_coverage"].keys()))
+            for yr in years_covered:
+                days_in_yr = [d for d in self.manifest["daily_coverage"].keys() if d.startswith(str(yr))]
+                total_expected = 366 if calendar.isleap(yr) else 365
+                
+                # Check for missing calendar dates in this year
+                all_year_dates = []
+                dt = datetime(yr, 1, 1)
+                end_yr = datetime(yr, 12, 31)
+                while dt <= end_yr:
+                    all_year_dates.append(dt.strftime("%Y-%m-%d"))
+                    dt += timedelta(days=1)
+                
+                missing_in_year = [d for d in all_year_dates if d not in self.manifest["daily_coverage"]]
+                
+                self.manifest["yearly_summary"][str(yr)] = {
+                    "nsidc_days": len(days_in_yr),
+                    "era5_days": len(days_in_yr),
+                    "cmems_days": len(days_in_yr),
+                    "total_days_in_year": total_expected,
+                    "completed_ratio": f"{len(days_in_yr)}/{total_expected}",
+                    "missing_dates": {
+                        "nsidc": missing_in_year,
+                        "era5": missing_in_year,
+                        "cmems": missing_in_year,
+                    }
+                }
+
             self._save_manifest()
             logger.info(f"Chunk {chunk_id} successfully regridded and recorded: {len(days_saved)} daily files.")
 

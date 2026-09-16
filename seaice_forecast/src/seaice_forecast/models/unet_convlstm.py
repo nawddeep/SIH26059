@@ -40,7 +40,9 @@ class UNetConvLSTM(nn.Module):
         convlstm_layers: int = 1,
         use_batch_norm: bool = True,
         dropout: float = 0.0,
-        output_activation: str = "sigmoid"
+        output_activation: str = "sigmoid",
+        residual: bool = False,
+        sic_channel: int = 0
     ):
         """
         Args:
@@ -53,12 +55,29 @@ class UNetConvLSTM(nn.Module):
             use_batch_norm: Whether to use batch normalization.
             dropout: Spatial dropout probability.
             output_activation: Output activation ('sigmoid' or 'none').
+            residual: If True, predict the CHANGE in SIC rather than SIC itself:
+
+                          out = clamp(SIC[t] + delta, 0, 1)
+
+                      The encoder/decoder path downsamples 332x316 to roughly
+                      20x19 before reconstructing, so reproducing today's field
+                      exactly - which is what persistence does, and persistence
+                      is a very strong baseline for daily SIC - means pushing
+                      the whole field through that bottleneck and back. In
+                      residual mode a zero output *is* persistence, so the
+                      network starts at persistence-level skill and only has to
+                      learn the correction. Standard practice in sea-ice and
+                      weather nowcasting.
+            sic_channel: Index of SIC within the per-timestep variable channels
+                      (0 for the standard ordering).
         """
         super().__init__()
 
         self.in_channels = in_channels
         self.output_channels = output_channels
         self.seq_len = seq_len
+        self.residual = residual
+        self.sic_channel = sic_channel
         self.encoder_channels = encoder_channels
         self.bottleneck_channels = bottleneck_channels or (encoder_channels[-1] * 2)
         self.convlstm_layers = convlstm_layers
@@ -120,6 +139,15 @@ class UNetConvLSTM(nn.Module):
         else:
             self.output_activation = nn.Identity()
 
+        if self.residual:
+            # Start training exactly at persistence: a zero delta reproduces
+            # today's SIC, so epoch 0 already has persistence-level skill and
+            # gradients only need to learn the correction. Same idea as
+            # zero-initialising residual branches in ResNet.
+            nn.init.zeros_(self.output_conv.weight)
+            if self.output_conv.bias is not None:
+                nn.init.zeros_(self.output_conv.bias)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass.
@@ -180,6 +208,16 @@ class UNetConvLSTM(nn.Module):
 
         # Step 4: Final 1x1 conv and activation
         out = self.output_conv(dec)
+
+        if self.residual:
+            # Predict the day-on-day CHANGE and add it to the last observed SIC.
+            # tanh bounds the correction to [-1, 1], which spans the full range
+            # of a physically possible one-step SIC change; a zero output
+            # reproduces persistence exactly.
+            delta = torch.tanh(out)
+            last_sic = x[:, -1, self.sic_channel:self.sic_channel + 1]  # [B,1,H,W]
+            return torch.clamp(last_sic + delta, 0.0, 1.0)
+
         out = self.output_activation(out)
 
         return out

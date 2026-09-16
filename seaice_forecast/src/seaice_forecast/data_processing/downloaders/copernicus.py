@@ -154,8 +154,9 @@ class CopernicusMarineDownloader:
                         f"depth={ds['depth'].values if 'depth' in ds else 'surface'}, 0 duplicates."
                     )
 
-                # Move validated file
-                actual_path.replace(output_file)
+                # Move validated file if needed
+                if actual_path != output_file:
+                    actual_path.replace(output_file)
                 return output_file
 
             except Exception as e:

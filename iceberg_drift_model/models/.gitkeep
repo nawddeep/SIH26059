@@ -1,6 +1,0 @@
-# Placeholder for model checkpoints
-# This directory will contain:
-# - best_model.pt
-# - checkpoint_epoch_*.pt
-# - final_model.pt
-# - feature_scaler.pkl
