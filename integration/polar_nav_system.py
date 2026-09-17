@@ -148,14 +148,8 @@ class PolarNavigationSystem:
         cost = build_cost_grid(
             sic_grid=sic, polar_class=self.polar_class,
             distance_weight=distance_weight, risk_weight=risk_weight,
-            land_mask=land, pixel_size_km=25.0,
+            fuel_weight=fuel_weight, land_mask=land, pixel_size_km=25.0,
         )
-        if fuel_weight:   # fuel term not yet inside build_cost_grid
-            fuel = fuel_per_cell_array(25.0, sic, polar_class=self.polar_class)
-            ref = fuel_per_cell_array(25.0, np.zeros_like(sic),
-                                      polar_class=self.polar_class).max()
-            add = fuel_weight * (fuel / max(ref, 1e-9))
-            cost = np.where(np.isfinite(cost), cost + add, cost)
 
         path = astar_path(cost, tuple(start), tuple(goal))
         if not path:

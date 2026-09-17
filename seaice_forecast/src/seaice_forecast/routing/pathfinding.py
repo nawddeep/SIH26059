@@ -57,25 +57,41 @@ def build_cost_grid(
     polar_class: Union[int, str] = "PC4",
     distance_weight: float = 1.0,
     risk_weight: float = 1.0,
+    fuel_weight: float = 0.0,
     land_mask: Optional[np.ndarray] = None,
     pixel_size_km: float = 25.0,
     config: Optional[Union[dict, PolarisRiskConfig]] = None,
+    fuel_config=None,
 ) -> np.ndarray:
     """
-    Build 2D cost grid combining base traversal distance and POLARIS navigational risk.
+    Build 2D cost grid combining base traversal distance, POLARIS navigational
+    risk, and ice-aware fuel burn.
 
     Cost formulation:
-        C(r, c) = distance_weight * base_cost + risk_weight * risk_cost(r, c)
+        C(r, c) = distance_weight * base_cost
+                + risk_weight     * 10.0 * risk_cost(r, c)
+                + fuel_weight     * fuel_cost(r, c)
+
     Land cells and invalid/NaN cells are set to np.inf.
+
+    The fuel term is divided by the open-water burn for the same cell and
+    vessel, so it is ~1.0 in open water and ~4.3 in heavy ice regardless of ship
+    size. Raw tonnes would make fuel_weight dominate or vanish depending on the
+    vessel, which would stop the three weights meaning the same thing across
+    ships. The reference is recomputed from fuel_config and pixel_size_km, so
+    overriding base_rate_t_per_km or v_ref_kn rescales it correctly.
 
     Args:
         sic_grid: 2D array of Sea-Ice Concentration in [0, 1].
         polar_class: Vessel Polar Class (e.g., 'PC1' - 'PC7' or 'UNCLASSED').
         distance_weight: Scaling weight for distance / step penalty.
         risk_weight: Scaling weight for navigational ice risk.
+        fuel_weight: Scaling weight for ice-aware fuel burn. Defaults to 0.0,
+            which reproduces the pre-fuel cost grid bitwise.
         land_mask: Boolean array where True = land (impassable).
         pixel_size_km: Grid cell resolution in km (default 25.0 km).
         config: Optional PolarisRiskConfig configuration.
+        fuel_config: Optional FuelConfig for the fuel term.
 
     Returns:
         2D float array of traversal costs.
@@ -93,8 +109,18 @@ def build_cost_grid(
     # Base cell traversal cost (normalized or physical)
     base_dist = 1.0
 
-    # Combine distance and risk
     cost_grid = (distance_weight * base_dist) + (risk_weight * 10.0 * risk_grid)
+
+    if fuel_weight:
+        from seaice_forecast.fuel import fuel_per_cell, fuel_per_cell_array
+
+        fuel_grid = fuel_per_cell_array(
+            pixel_size_km, sic_clean, polar_class=polar_class, config=fuel_config
+        )
+        fuel_reference = fuel_per_cell(
+            pixel_size_km, 0.0, polar_class=polar_class, config=fuel_config
+        )
+        cost_grid = cost_grid + fuel_weight * (fuel_grid / fuel_reference)
 
     # Apply land mask: impassable barrier
     if land_mask is not None:

@@ -1,0 +1,95 @@
+{
+  "generatedAt": "2026-09-16T07:26:58Z",
+  "loadWith": "joblib.load(path)  # then .predict(...)",
+  "note": "Two artifacts hold weights fitted from data (seaice_forecast, iceberg_drift); two hold the constants of a published formula (polaris_risk, fuel_consumption) and have no learned parameters.",
+  "artifacts": [
+    {
+      "key": "polaris_risk",
+      "file": "polaris_risk.pkl",
+      "name": "IMO POLARIS ice risk index",
+      "kind": "deterministic",
+      "source": "IMO MSC.1/Circ.1519",
+      "requires": [
+        "numpy",
+        "app.model_artifacts on sys.path"
+      ],
+      "output": "navigational risk index in [0, 1]",
+      "sizeMB": 0.0,
+      "sha256": "29d0e8d50059736455fcdb08cc7bc42d75ffdf0946f0c43f212c29720cc09f5b",
+      "roundTrip": {
+        "input": "SIC 0.70, PC4",
+        "output": 0.4797
+      }
+    },
+    {
+      "key": "fuel_consumption",
+      "file": "fuel_consumption.pkl",
+      "name": "Ice-aware fuel consumption model",
+      "kind": "deterministic",
+      "source": "Riska et al. (1997) speed degradation; POLARIS class ladder",
+      "requires": [
+        "numpy",
+        "app.model_artifacts on sys.path"
+      ],
+      "output": "tonnes per cell, attainable speed in knots",
+      "sizeMB": 0.0,
+      "sha256": "baad9f0558ff189234bf5f30c1e18daca9fbc54b9ba1870257ce8b8f2fc5e71a",
+      "roundTrip": {
+        "input": "SIC 0.70, PC4, 25 km cell",
+        "output": {
+          "fuel_tonnes": 2.272,
+          "speed_knots": 6.638,
+          "transit_hours": 2.034
+        }
+      }
+    },
+    {
+      "key": "iceberg_drift",
+      "file": "iceberg_drift.pkl",
+      "name": "Iceberg drift predictor",
+      "kind": "trained",
+      "source": "US National Ice Center iceberg fixes",
+      "requires": [
+        "numpy",
+        "scikit-learn",
+        "app.model_artifacts on sys.path"
+      ],
+      "output": "24 h displacement (u, v) in m/s, and whether the berg is moving",
+      "sizeMB": 0.21,
+      "sha256": "338b6c6599ca866c7966aab7620eb3751df47c0e8c739dd0501baa4c4c6a3049",
+      "roundTrip": {
+        "input": "NIC berg a23a on 2016-11-18",
+        "output": {
+          "moving": true,
+          "drift_km_24h": 0.769
+        }
+      }
+    },
+    {
+      "key": "seaice_forecast",
+      "file": "seaice_forecast.pkl",
+      "name": "Antarctic sea-ice forecaster",
+      "kind": "trained",
+      "source": "NSIDC CDR v6, Southern Hemisphere 25 km",
+      "requires": [
+        "numpy",
+        "torch",
+        "app.model_artifacts + seaice_forecast on sys.path"
+      ],
+      "output": "next-day sea-ice concentration, 332x316 grid in [0, 1]",
+      "sizeMB": 29.01,
+      "sha256": "696eaf5aca28d0ef3aed736f8eb1eaa2ce492d4ef43776420d30d7acc77cef9f",
+      "roundTrip": {
+        "input": "7 days ending 2018-12-20",
+        "output": {
+          "shape": [
+            332,
+            316
+          ],
+          "mean": 0.0763,
+          "max": 0.9804
+        }
+      }
+    }
+  ]
+}
