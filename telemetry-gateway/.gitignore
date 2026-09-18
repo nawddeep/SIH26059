@@ -1,0 +1,16 @@
+# Runtime state - regenerated on every run, never source
+buffer.db
+buffer.db-wal
+buffer.db-shm
+*.log
+*.jsonl
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# OS
+.DS_Store
