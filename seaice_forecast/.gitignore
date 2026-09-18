@@ -78,3 +78,5 @@ htmlcov/
 # performance claim this project makes. They are 4 KB each.
 !output/evaluation/baseline_comparison.json
 !output/drift_twostage_metrics.json
+
+!output/evaluation/rollout_comparison.json

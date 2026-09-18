@@ -14,7 +14,7 @@ over a satellite link that barely exists below 70°S.
 
 | Model | Type | What it does | Measured performance |
 |-------|------|--------------|----------------------|
-| **Sea-ice forecaster** | Trained (PyTorch) | U-Net + ConvLSTM, next-day concentration over a 332×316 EPSG:3412 grid | Beats climatology at every horizon (MAE 0.053 vs 0.217 at +1d); **beaten by persistence at every horizon tested**, +1d to +7d |
+| **Sea-ice forecaster** | Trained (PyTorch) | U-Net + ConvLSTM, **next-day** concentration over a 332×316 EPSG:3412 grid | At +1d beats climatology ~2.5× (0.044 vs 0.110) but is **beaten by persistence** (0.020). Not usable beyond +1d — see below |
 | **Iceberg drift** | Trained (scikit-learn) | Two-stage HistGradientBoosting — moving/stationary gate, then u/v regressors | **3.91 km RMS** 24 h position error, 96.7% within 10 km, 9.5% skill vs constant-velocity |
 | **POLARIS ice risk** | Deterministic | IMO MSC.1/Circ.1519 Risk Index Outcome | Validated by property tests — a published standard has no accuracy figure |
 | **Ice-aware fuel model** | Deterministic | Speed collapse × power ramp, per Polar Class | Validated by property tests |
@@ -147,11 +147,34 @@ without that environment reports the models as unavailable — check
 These are stated plainly because a decision-support tool that overstates itself
 is worse than one that does not exist.
 
-- **The sea-ice forecaster is beaten by persistence at every horizon tested**
-  (+1d through +7d). It beats climatology at all of them by roughly 4x, so it
-  has learned real structure, but persistence remains the stronger baseline at
-  these leads and that is the honest summary. Training also hits a documented
-  non-finite-loss problem — see [`seaice_forecast/OPEN_PROBLEM.md`](seaice_forecast/OPEN_PROBLEM.md).
+- **The sea-ice forecaster is beaten by persistence, and is a next-day model
+  only.** At +1d it beats climatology by roughly 2.5× (0.044 vs 0.110 MAE over
+  the ice zone), so it has learned real structure, but persistence scores 0.020
+  and is the stronger baseline.
+
+  Beyond +1d it should not be used. The shipped checkpoint was trained with
+  `forecast_horizon=1`; driving it autoregressively compounds its own error at
+  every step, and by +5d it is beaten by climatology as well. Measured with
+  `scripts/evaluation/rollout_comparison.py`:
+
+  | lead | model | persistence | climatology |
+  |------|-------|-------------|-------------|
+  | +1d  | 0.044 | **0.020** | 0.110 |
+  | +3d  | 0.103 | **0.036** | 0.110 |
+  | +5d  | 0.147 | **0.046** | 0.108 |
+  | +7d  | 0.182 | **0.055** | 0.108 |
+  | +14d | 0.231 | **0.084** | 0.111 |
+
+  The older `baseline_comparison.py` reports better multi-day figures, but it
+  applies a single forward pass at every horizon — grading a one-day forecast
+  against truth a week later. Those numbers are only valid at +1d. Both scripts
+  and both result files are committed so the difference can be inspected.
+
+  A direct multi-horizon architecture exists in
+  `src/seaice_forecast/models/multi_horizon.py` and is the right way to serve
+  leads beyond +1d; it is not what the shipped checkpoint trained. Training also
+  hits a documented non-finite-loss problem — see
+  [`seaice_forecast/OPEN_PROBLEM.md`](seaice_forecast/OPEN_PROBLEM.md).
 - **Nothing here is real-time.** The processed archive ends **2018-12-31**, so
   every forecast is historical reanalysis.
 - **Vessel telemetry is display-only.** It is deliberately not an input to the
