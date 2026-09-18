@@ -14,8 +14,8 @@ over a satellite link that barely exists below 70°S.
 
 | Model | Type | What it does | Measured performance |
 |-------|------|--------------|----------------------|
-| **Sea-ice forecaster** | Trained (PyTorch) | U-Net + ConvLSTM, next-day concentration over a 332×316 EPSG:3412 grid | Beats climatology at every horizon; **does not clearly beat persistence** at short leads |
-| **Iceberg drift** | Trained (scikit-learn) | Two-stage HistGradientBoosting — moving/stationary gate, then u/v regressors | **3.96 km RMS** 24 h position error, 96.7% within 10 km |
+| **Sea-ice forecaster** | Trained (PyTorch) | U-Net + ConvLSTM, next-day concentration over a 332×316 EPSG:3412 grid | Beats climatology at every horizon (MAE 0.053 vs 0.217 at +1d); **beaten by persistence at every horizon tested**, +1d to +7d |
+| **Iceberg drift** | Trained (scikit-learn) | Two-stage HistGradientBoosting — moving/stationary gate, then u/v regressors | **3.91 km RMS** 24 h position error, 96.7% within 10 km, 9.5% skill vs constant-velocity |
 | **POLARIS ice risk** | Deterministic | IMO MSC.1/Circ.1519 Risk Index Outcome | Validated by property tests — a published standard has no accuracy figure |
 | **Ice-aware fuel model** | Deterministic | Speed collapse × power ramp, per Polar Class | Validated by property tests |
 
@@ -131,8 +131,10 @@ without that environment reports the models as unavailable — check
 These are stated plainly because a decision-support tool that overstates itself
 is worse than one that does not exist.
 
-- **The sea-ice forecaster does not clearly beat persistence** at short lead
-  times. It beats climatology at every horizon. Training also hits a documented
+- **The sea-ice forecaster is beaten by persistence at every horizon tested**
+  (+1d through +7d). It beats climatology at all of them by roughly 4x, so it
+  has learned real structure, but persistence remains the stronger baseline at
+  these leads and that is the honest summary. Training also hits a documented
   non-finite-loss problem — see [`seaice_forecast/OPEN_PROBLEM.md`](seaice_forecast/OPEN_PROBLEM.md).
 - **Nothing here is real-time.** The processed archive ends **2018-12-31**, so
   every forecast is historical reanalysis.

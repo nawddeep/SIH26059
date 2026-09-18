@@ -5,10 +5,13 @@ Serves sea-ice and iceberg data from the trained models. The simulated
 generators this once fell back to have been removed:
 
   * sea ice   - U-Net + ConvLSTM on NSIDC CDR v6, 332x316 EPSG:3412 grid.
-                Validated against persistence and climatology on a held-out
-                2017-2018 split (matches persistence at +5d, beats it at +7d).
+                On a held-out 2017-2018 split it beats climatology at every
+                horizon and is beaten by persistence at every horizon tested
+                (+1d through +7d). See seaice_forecast/OPEN_PROBLEM.md. Do not
+                describe this model as having skill over persistence.
   * icebergs  - two-stage HistGradientBoosting drift model trained on real NIC
-                fixes. 3.96 km RMS 24 h position error, 96.7% within 10 km.
+                fixes. 3.91 km RMS 24 h position error, 96.7% within 10 km,
+                9.5% skill over a constant-velocity baseline.
 
 If the model repo or its artifacts are missing, every function here raises and
 the caller returns an empty field tagged "unavailable". The map keeps rendering
