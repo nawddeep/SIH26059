@@ -478,3 +478,153 @@ async def system_status():
             "Every forecast is historical reanalysis anchored to it, not a live feed."
         ),
     }
+
+
+@app.post("/api/route-alternatives")
+async def route_alternatives(req: RouteRequest):
+    """Plan the same passage under every objective and return the trade-offs.
+
+    A single "optimal" route hides the decision. The objectives genuinely
+    disagree - the safe track is longer, the fuel-optimal one spends more time in
+    ice than the fastest - and the master is the one who has to weigh that. This
+    returns all four so the trade-off is visible rather than resolved silently on
+    the reader's behalf.
+
+    No blended "balanced" objective is offered. Blending needs weights, and any
+    weight chosen here would be this system's opinion about how many tonnes of
+    fuel a unit of ice risk is worth. That is the master's call, and inventing a
+    number for it would dress a guess up as an optimum.
+    """
+    try:
+        engine: RouteEngine = app.state.engine
+    except AttributeError:
+        raise HTTPException(503, "route engine not ready")
+
+    dep = _parse_departure(req.departureTimeUTC)
+    objectives = [
+        ("distance", "Shortest", "Least distance over ground"),
+        ("time", "Fastest", "Least time, using current and wind along track"),
+        ("fuel", "Fuel-optimised", "Least burn, pricing ice through speed collapse"),
+        ("safety", "Safest", "Least exposure to ice, weather and icebergs"),
+    ]
+
+    routes, rows = {}, []
+    for key, label, description in objectives:
+        try:
+            res = engine.compute_route(
+                [w for w in req.waypoints],
+                speed_knots=req.speedKnots,
+                departure_time_utc=dep,
+                optimize_for=key,
+                vessel_type=req.vesselType,
+                draft_meters=req.draftMeters,
+                ice_class=req.iceClass,
+            )
+        except RouteError as exc:
+            rows.append({"key": key, "label": label, "description": description,
+                         "available": False, "error": str(exc)})
+            continue
+        except Exception as exc:  # noqa: BLE001
+            rows.append({"key": key, "label": label, "description": description,
+                         "available": False, "error": f"{type(exc).__name__}: {exc}"})
+            continue
+
+        routes[key] = res
+        rows.append({
+            "key": key, "label": label, "description": description, "available": True,
+            "distanceNm": res.get("totalDistanceNm"),
+            "durationHours": res.get("totalDurationHours"),
+            "fuelTonnes": res.get("estimatedFuelTons"),
+            "distanceInIceNm": res.get("totalDistanceInSeaIceNm"),
+            "maxIceConcentrationPct": res.get("maxSeaIceConcentrationPct"),
+            "maxPolarisRisk": res.get("maxPolarisRisk"),
+            "meanPolarisRisk": res.get("meanPolarisRisk"),
+            "safetyScore": res.get("safetyScore"),
+            "closestIcebergNm": (res.get("explanation") or {}).get("closestIcebergNm"),
+        })
+
+    available = [r for r in rows if r.get("available")]
+    if not available:
+        raise HTTPException(422, "no route could be planned under any objective")
+
+    # Express every option as a delta from the shortest route, because "18% more
+    # fuel to halve peak ice risk" is a decision a reader can actually make;
+    # four absolute numbers are not.
+    base = next((r for r in available if r["key"] == "distance"), available[0])
+    for r in available:
+        def pct(field):
+            b, v = base.get(field), r.get(field)
+            if not b or v is None:
+                return None
+            return round((v - b) / b * 100.0, 1)
+        r["deltaVsShortest"] = {
+            "distancePct": pct("distanceNm"),
+            "fuelPct": pct("fuelTonnes"),
+            "durationPct": pct("durationHours"),
+            "iceExposurePct": pct("distanceInIceNm"),
+        }
+
+    def best(field, lowest=True):
+        vals = [(r[field], r["key"]) for r in available if r.get(field) is not None]
+        if not vals:
+            return None
+        return (min(vals) if lowest else max(vals))[1]
+
+    # An objective that loses on its own metric is a calibration fault, not a
+    # trade-off. Detect it here and say so, rather than shipping a route
+    # labelled "Safest" that another option beats on every safety measure.
+    # The comparison endpoint exists precisely to make disagreements visible;
+    # hiding this one would defeat the point of having it.
+    warnings = []
+    checks = [
+        ("safety", "maxPolarisRisk", "peak POLARIS risk"),
+        ("safety", "distanceInIceNm", "distance in ice"),
+        ("fuel", "fuelTonnes", "fuel burn"),
+        ("time", "durationHours", "duration"),
+        ("distance", "distanceNm", "distance"),
+    ]
+    for key, field, human in checks:
+        row = next((r for r in available if r["key"] == key), None)
+        if not row or row.get(field) is None:
+            continue
+        better = [r for r in available
+                  if r["key"] != key and r.get(field) is not None
+                  and r[field] < row[field]]
+        if better:
+            winner = min(better, key=lambda r: r[field])
+            warnings.append({
+                "objective": key,
+                "metric": human,
+                "detail": (
+                    f"the '{key}' objective scores {row[field]} on {human}, "
+                    f"worse than '{winner['key']}' at {winner[field]}"
+                ),
+            })
+
+    return {
+        "comparison": rows,
+        "best": {
+            "shortest": best("distanceNm"),
+            "fastest": best("durationHours"),
+            "leastFuel": best("fuelTonnes"),
+            "leastIceExposure": best("distanceInIceNm"),
+            "lowestPeakRisk": best("maxPolarisRisk"),
+        },
+        "routes": routes,
+        "iceDataSource": base.get("explanation", {}).get("iceDataSource")
+        if isinstance(base.get("explanation"), dict) else None,
+        "warnings": warnings,
+        "note": (
+            "Objectives genuinely disagree; no blended option is offered because "
+            "blending requires weighing fuel against risk, which is the master's "
+            "judgement and not this system's."
+        ),
+        "warningsNote": (
+            "A non-empty 'warnings' list means an objective lost on its own "
+            "metric, which is a cost-function calibration fault rather than a "
+            "trade-off. Treat that option's label as unreliable."
+        ),
+        "caveat": (
+            "All options costed against historical reanalysis. Advisory only."
+        ),
+    }

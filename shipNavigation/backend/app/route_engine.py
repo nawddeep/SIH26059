@@ -426,10 +426,26 @@ class GridRouter:
                     # ~4.3x in heavy pack, far more than currents or wind move it.
                     edge *= _fuel_mult
                 elif optimize_for == "safety":
-                    # Safety maximization: Extra penalty on ice zones, extreme wind storms, and iceberg proximity
+                    # Safety: ice risk for THIS hull dominates, then icebergs,
+                    # then weather.
+                    #
+                    # The ordering is deliberate and was got wrong once. With
+                    # weather uncapped and ice priced only by concentration, the
+                    # "safest" route came back 119% longer than the shortest
+                    # while carrying HIGHER peak POLARIS risk (0.541 vs 0.373) -
+                    # it had traded ice risk for wind avoidance. POLARIS is the
+                    # IMO standard for whether a hull may be in given ice at all,
+                    # so no other term may outrank it. Weather is capped for the
+                    # same reason: heavy weather is uncomfortable, ice beyond a
+                    # hull's class is disabling.
                     wind_speed = math.hypot(u_wind, v_wind) * 1.94384
-                    weather_hazard = max(0.0, (wind_speed - 12.0) * 0.04)
-                    safety_penalty = 1.0 + 0.25 * (ice_conc / 10.0) + weather_hazard
+                    weather_hazard = min(0.6, max(0.0, (wind_speed - 12.0) * 0.04))
+                    safety_penalty = (
+                        1.0
+                        + 6.0 * _pol_risk            # hull-aware ice risk, dominant
+                        + 0.25 * (ice_conc / 10.0)   # raw concentration, secondary
+                        + weather_hazard             # capped at +0.6
+                    )
                     for b_lat, b_lon in iceberg_coords:
                         dist_b = geo.haversine(lat_rr, lon_cc, b_lat, b_lon) / geo.NM_TO_M
                         if dist_b < 60.0:  # 60 nm safety buffer

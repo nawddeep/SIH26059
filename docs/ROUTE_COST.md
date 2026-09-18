@@ -125,6 +125,42 @@ The router refuses rather than guessing:
 - **Fewer than two waypoints** → `RouteError`.
 - **Destination unreachable** (interior land, no navigable path) → `RouteError`.
 
+## Known defect: objectives do not reliably win on their own metric
+
+`POST /api/route-alternatives` plans the same passage under all four objectives
+and **checks whether each one actually wins on the metric it optimises**. On a
+representative Antarctic Peninsula passage it does not:
+
+```
+the 'safety' objective scores 0.541 on peak POLARIS risk, worse than 'distance' at 0.373
+the 'safety' objective scores 128.2 on distance in ice,  worse than 'fuel'     at 67.8
+the 'fuel'   objective scores  37.6 on fuel burn,        worse than 'distance' at 37.0
+the 'time'   objective scores 38.28 on duration,         worse than 'fuel'     at 38.14
+```
+
+Two distinct problems.
+
+**Serious — the safety objective.** It returns a track 119% longer that carries
+*higher* peak POLARIS risk and nearly double the distance in ice. A route
+labelled "Safest" that loses on every safety metric is worse than no safety
+option at all, because the label is what a reader trusts. The cost weights were
+rebalanced to make POLARIS dominant and cap the weather term, which changed the
+ordering but did not fix this case. Root cause is not yet established.
+
+**Minor — the other three.** `_leg_path` returns the great-circle track directly
+when `optimize_for == "distance"` and the track is land-free, bypassing A*
+entirely. The grid-based objectives can therefore find paths a few tenths of a
+percent better on distance and duration than "distance" mode itself. A grid
+artefact, not a modelling error.
+
+Until the safety objective is fixed, **treat its label as unreliable** and read
+the comparison table rather than the label. The API says so itself: a non-empty
+`warnings` array means an objective lost on its own metric.
+
+This is surfaced rather than hidden because the comparison endpoint exists to
+make disagreements between objectives visible, and the most important
+disagreement it found was the system contradicting itself.
+
 ## Limits worth stating
 
 - The cost weights are **engineering judgement calibrated against published
