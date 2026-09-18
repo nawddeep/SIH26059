@@ -172,11 +172,52 @@ The likely fix is a minimax formulation for the safety objective - bound the
 worst cell the route may cross, rather than integrating exposure - but that is a
 different search, not a weight change, and it has not been implemented.
 
-**Minor — the other three.** `_leg_path` returns the great-circle track directly
-when `optimize_for == "distance"` and the track is land-free, bypassing A*
-entirely. The grid-based objectives can therefore find paths a few tenths of a
-percent better on distance and duration than "distance" mode itself. A grid
-artefact, not a modelling error.
+**Also real — the fuel objective.** On the same passage `fuel` burns 37.6 t
+while `time` burns 37.0 t: 1.6% worse on the metric it exists to minimise. Both
+are grid-searched, so this is not the great-circle artefact below. The ice fuel
+multiplier and the cubic water-speed term are applied to the same edge, and the
+combination appears to over-penalise light-ice cells that `time` crosses
+happily. Not yet isolated.
+
+**Artefact, not a defect — "distance" winning on distance.** `_leg_path` returns
+the great-circle track directly when `optimize_for == "distance"` and the track
+is land-free, bypassing A*. It is therefore not grid-constrained while every
+other objective is, and beats them by tenths of a percent on distance and
+duration. Comparisons against `distance` are not like-for-like.
+
+### What was ruled out, and how
+
+Both defects were investigated by experiment rather than argument:
+
+| Hypothesis | Test | Result |
+|---|---|---|
+| Iceberg term diverts the track | measured berg distance | nearest is 509 nm — not it |
+| Weather term dominates | disabled it | route got **worse** (1503 nm, 0.854) — it was constraining, not causing |
+| A* and metrics use different ice | traced both | same `get_sea_ice_concentration` — not it |
+| Post-hoc smoothing moves the track | compared raw vs smoothed | 0.843 → 0.854, only 0.011 — not it |
+| Metrics depend on sampling density | densified 4× | unchanged — not it |
+| A better grid path does not exist | ran all objectives through A* | **it does**: distance/fuel/time reach 0.373 in ~25 cells, safety takes 198 to reach 0.843 |
+
+That last row is the important one. A 0.373 path is reachable on the grid and
+three objectives find it, so the safety search is not constrained by geometry -
+its objective is wrong.
+
+Raising the risk weight makes it **worse**, which is the signature: 40× gives
+0.541, 99999× gives 0.854. A cost that sums risk over a track will always trade
+one severe cell for many mild ones. That is the wrong trade for ice, where a
+hull either survives the worst cell it meets or it does not.
+
+The fix is a **bottleneck (minimax) search** - order the frontier by the worst
+risk on the path, then by distance. An implementation was attempted and reverted:
+it did not find the known-better 0.373 path and the reason was not isolated, and
+shipping an unproven search is worse than shipping a documented defect.
+
+### Encoded as tests
+
+`shipNavigation/backend/tests/test_routing_safety.py::TestObjectivesWinTheirOwnMetric`
+asserts that each objective wins on its own metric. Both failures are marked
+`xfail` with these reasons, so they stay visible in every test run rather than
+living in a review comment.
 
 Until the safety objective is fixed, **treat its label as unreliable** and read
 the comparison table rather than the label. The API says so itself: a non-empty

@@ -233,3 +233,109 @@ class TestRouteExplanation:
         exp = explain_route(summary, "safety", "unclassed", (), [])
         assert exp["maxIceRisk"] >= 0.9
         assert "safe" not in exp["reason"].lower().replace("safety", "")
+
+
+# ------------------------------------------- does each objective win its own metric?
+class TestObjectivesWinTheirOwnMetric:
+    """An objective that loses on the metric it optimises is mis-calibrated.
+
+    This is the acceptance criterion for the routing layer: ask for the safest
+    route and it should carry the lowest peak ice risk; ask for the cheapest and
+    it should burn least. Encoded here so the requirement is visible and
+    checkable rather than living in a review comment.
+
+    The safety case is marked xfail because it genuinely fails today. Marking it
+    rather than omitting it keeps the gap in the test output, where it belongs -
+    a requirement nobody has written down is a requirement nobody will fix.
+    """
+
+    ROUTES = [
+        ("Peninsula NE-SW", (-62.0, -58.0), (-67.0, -68.0)),
+        ("Weddell approach", (-60.0, -45.0), (-70.0, -40.0)),
+    ]
+
+    @pytest.fixture(scope="class")
+    def engine(self):
+        from app.datastore import Datastore
+        from app.mask import LandMask
+        from app.route_engine import RouteEngine
+        try:
+            store = Datastore()
+            mask = LandMask()
+            return RouteEngine(mask, store.ecas, store.chokepoints,
+                               waterways=store.waterways)
+        except Exception as exc:  # noqa: BLE001
+            pytest.skip(f"route engine unavailable: {exc}")
+
+    def _plan(self, engine, a, b, objective):
+        from datetime import datetime
+        from app.route_engine import RouteError
+        try:
+            return engine.compute_route(
+                [{"label": "A", "lat": a[0], "lon": a[1]},
+                 {"label": "B", "lat": b[0], "lon": b[1]}],
+                speed_knots=12.0, departure_time_utc=datetime(2018, 12, 20),
+                optimize_for=objective, vessel_type="research",
+                draft_meters=7.0, ice_class="pc5",
+            )
+        except RouteError:
+            return None
+
+    @pytest.mark.xfail(
+        reason=(
+            "Known defect, smaller than the safety one but real. On the Peninsula "
+            "passage the 'fuel' objective burns 37.6 t while 'time' burns 37.0 t - "
+            "1.6% worse on the metric it exists to minimise. Both are grid-searched, "
+            "so this is not the great-circle artefact that explains 'distance' "
+            "winning: it is the fuel cost's own weighting. The ice fuel multiplier "
+            "and the cubic water-speed term are applied to the same edge, and the "
+            "combination appears to over-penalise light-ice cells that the time "
+            "objective is happy to cross. Not yet isolated."
+        ),
+        strict=False,
+    )
+    def test_fuel_objective_burns_least(self, engine):
+        """Compared only against other grid-searched objectives.
+
+        'distance' is excluded because when the great-circle track is land-free,
+        _leg_path returns it directly and never enters A*, so it is not
+        grid-constrained while every other objective is. That exclusion is about
+        comparing like with like - it does not rescue this test, which fails
+        against 'time' regardless.
+        """
+        for name, a, b in self.ROUTES:
+            routes = {o: self._plan(engine, a, b, o) for o in ("time", "fuel", "safety")}
+            got = {o: r["estimatedFuelTons"] for o, r in routes.items() if r}
+            if len(got) < 2:
+                continue
+            best = min(got, key=got.get)
+            # A tenth of a percent is grid noise, not a calibration fault.
+            assert got["fuel"] <= got[best] * 1.001, (
+                f"{name}: 'fuel' burns {got['fuel']} t, '{best}' burns {got[best]} t"
+            )
+
+    @pytest.mark.xfail(
+        reason=(
+            "Known defect. The safety objective returns a track with HIGHER peak "
+            "POLARIS risk than the shortest route - measured 0.541 vs 0.373 on the "
+            "Peninsula passage. A grid path at 0.373 demonstrably exists: the "
+            "distance, fuel and time objectives all find it in ~25 cells, while "
+            "safety takes 198 cells to reach 0.843. Raising the risk weight makes "
+            "it worse, not better (40x -> 0.541, 99999x -> 0.854), which is the "
+            "signature of a min-sum objective being used for a minimax problem. "
+            "See docs/ROUTE_COST.md."
+        ),
+        strict=False,
+    )
+    def test_safety_objective_carries_lowest_peak_risk(self, engine):
+        for name, a, b in self.ROUTES:
+            routes = {o: self._plan(engine, a, b, o)
+                      for o in ("distance", "fuel", "safety")}
+            got = {o: r["maxPolarisRisk"] for o, r in routes.items() if r}
+            if len(got) < 2 or "safety" not in got:
+                continue
+            best = min(got, key=got.get)
+            assert got["safety"] <= got[best] + 1e-6, (
+                f"{name}: 'safety' peak risk {got['safety']}, "
+                f"'{best}' achieves {got[best]}"
+            )
