@@ -628,3 +628,41 @@ async def route_alternatives(req: RouteRequest):
             "All options costed against historical reanalysis. Advisory only."
         ),
     }
+
+
+class ReplayRequest(BaseModel):
+    waypoints: list = Field(default_factory=list)
+    startDate: str = "2018-07-15"
+    steps: int = Field(default=4, ge=1, le=12)
+    stepDays: int = Field(default=2, ge=1, le=30)
+    speedKnots: float = 12.0
+    vesselType: str = "research"
+    draftMeters: float = 7.0
+    iceClass: str = "pc5"
+    optimizeFor: str = "safety"
+
+
+@app.post("/api/replay")
+async def historical_replay(req: ReplayRequest):
+    """Replay archived conditions, re-planning the route at each step.
+
+    Pick a date whose outcome is already known, watch what the models predicted
+    and what route followed, and step forward as conditions evolve. This is the
+    closest this system can get to demonstrating operation, and in one respect
+    it is better than a live demo: the answer is already on the record.
+    """
+    engine = getattr(app.state, "engine", None)
+    try:
+        from .replay import replay
+        return replay(
+            waypoints=[w for w in req.waypoints],
+            start_date=req.startDate, steps=req.steps, step_days=req.stepDays,
+            speed_knots=req.speedKnots, vessel_type=req.vesselType,
+            draft_meters=req.draftMeters, ice_class=req.iceClass,
+            optimize_for=req.optimizeFor, engine=engine,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("replay failed")
+        raise HTTPException(500, f"{type(exc).__name__}: {exc}") from exc

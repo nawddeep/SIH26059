@@ -19,7 +19,7 @@ from . import geo
 from .mask import LandMask, LAT_TOP, LON_LEFT, NROWS, NCOLS, SPACING
 
 
-def get_sea_ice_concentration(lat: float, lon: float) -> float:
+def get_sea_ice_concentration(lat: float, lon: float, date_str: str | None = None) -> float:
     """Sea-ice concentration for route costing.
 
     Uses the trained U-Net+ConvLSTM forecast so the planner routes around ice
@@ -162,7 +162,7 @@ _ICE_CLASS_TO_POLAR = {
 }
 
 
-def polaris_risk_at(lat: float, lon: float, ice_class: str = "none") -> float:
+def polaris_risk_at(lat: float, lon: float, ice_class: str = "none", date_str: str | None = None) -> float:
     """IMO POLARIS navigational risk in [0, 1] for this hull at this point.
 
     Returns 0.0 (no ice penalty) whenever the model or the risk module is
@@ -175,7 +175,7 @@ def polaris_risk_at(lat: float, lon: float, ice_class: str = "none") -> float:
         from seaice_forecast.risk.polaris import risk_ice
 
         pc = _ICE_CLASS_TO_POLAR.get(str(ice_class).lower(), "UNCLASSED")
-        return float(risk_ice(sic_at_point(lat, lon) / 100.0, polar_class=pc))
+        return float(risk_ice(sic_at_point(lat, lon, date_str) / 100.0, polar_class=pc))
     except Exception:
         return 0.0
 
@@ -305,7 +305,7 @@ class GridRouter:
             self.lats[r2], ((self.lons[c2] % 360.0) - 180.0),
         )
 
-    def shortest_path(self, from_lat, from_lon, to_lat, to_lon, vessel_type="cargo", ice_class="none", optimize_for="distance", target_speed_knots=15.0):
+    def shortest_path(self, from_lat, from_lon, to_lat, to_lon, vessel_type="cargo", ice_class="none", optimize_for="distance", target_speed_knots=15.0, forecast_date=None):
         r0, c0 = self.cell_index(from_lat, from_lon)
         rg, cg = self.cell_index(to_lat, to_lon)
         if (r0, c0) == (rg, cg):
@@ -340,9 +340,9 @@ class GridRouter:
         def ice_at(cell, lat, lon):
             hit = ice_cache.get(cell)
             if hit is None:
-                conc = get_sea_ice_concentration(lat, lon)
+                conc = get_sea_ice_concentration(lat, lon, forecast_date)
                 if conc > 0.0:
-                    pol = polaris_risk_at(lat, lon, ice_class)
+                    pol = polaris_risk_at(lat, lon, ice_class, forecast_date)
                     fuel_mult = ice_fuel_multiplier(lat, lon, ice_class)
                 else:
                     pol, fuel_mult = 0.0, 1.0
@@ -716,7 +716,7 @@ class RouteEngine:
         return pts
 
     # ------------------------------------------------------------------ Stage B
-    def _land_avoid_path(self, a, b, vessel_type="cargo", ice_class="none", optimize_for="distance", speed_knots=15.0):
+    def _land_avoid_path(self, a, b, vessel_type="cargo", ice_class="none", optimize_for="distance", speed_knots=15.0, forecast_date=None):
         sa = self.mask.nearest_water(a.lat, a.lon)
         sb = self.mask.nearest_water(b.lat, b.lon)
         if sa is None:
@@ -739,6 +739,7 @@ class RouteEngine:
                 ice_class=ice_class,
                 optimize_for=optimize_for,
                 target_speed_knots=speed_knots,
+                forecast_date=forecast_date,
             )
         except ValueError as exc:
             raise RouteError(str(exc)) from exc
@@ -758,11 +759,11 @@ class RouteEngine:
                 out.append(p)
         return out
 
-    def _leg_path(self, a, b, vessel_type="cargo", ice_class="none", optimize_for="distance", speed_knots=15.0):
+    def _leg_path(self, a, b, vessel_type="cargo", ice_class="none", optimize_for="distance", speed_knots=15.0, forecast_date=None):
         gc = self._gc_path(a, b)
         if optimize_for == "distance" and _check_free(gc, self.mask):
             return gc
-        return self._land_avoid_path(a, b, vessel_type=vessel_type, ice_class=ice_class, optimize_for=optimize_for, speed_knots=speed_knots)
+        return self._land_avoid_path(a, b, vessel_type=vessel_type, ice_class=ice_class, optimize_for=optimize_for, speed_knots=speed_knots, forecast_date=forecast_date)
 
     # --------------------------------------------------------- Stages C and D
     def _eca_distance(self, path, eca_polys) -> float:
@@ -828,6 +829,15 @@ class RouteEngine:
 
         waypoints = [WP.from_maybe(w) for w in waypoints]
 
+        # Cost this passage against the ice field for the departure date. The
+        # archive is bounded, so a date outside it falls back to the model's
+        # default rather than failing the route.
+        _forecast_date = None
+        try:
+            _forecast_date = departure_time_utc.strftime("%Y-%m-%d")
+        except Exception:  # noqa: BLE001
+            _forecast_date = None
+
         if len(waypoints) < 2:
             raise RouteError("a route needs at least two waypoints")
 
@@ -858,7 +868,7 @@ class RouteEngine:
                 path = [(a.lat, a.lon)]
                 dist = 0.0
             else:
-                path = self._leg_path(a, b, vessel_type=vessel_type, ice_class=ice_class, optimize_for=optimize_for, speed_knots=speed_knots)
+                path = self._leg_path(a, b, vessel_type=vessel_type, ice_class=ice_class, optimize_for=optimize_for, speed_knots=speed_knots, forecast_date=_forecast_date)
                 dist = geo.polyline_length_nm(path)
             eca = self._eca_distance(path, [e[2] for e in self.ecas])
             crossing_list = self._crossings(path)
