@@ -1106,3 +1106,50 @@ body {
   100% { transform: scale(2.1); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .vt-marker-pulse { animation: none; opacity: 0.35; } }
+
+/* --- "why this route": the reasoning behind a routing decision ---------- */
+.route-why {
+  margin: 10px 0; border: 1px solid var(--line, #e2e8f0); border-left-width: 3px;
+  border-radius: 8px; background: #fbfdff; overflow: hidden;
+}
+.route-why.ok   { border-left-color: #0ca30c; }
+.route-why.warn { border-left-color: #fab219; }
+.route-why.crit { border-left-color: #d03b3b; }
+
+.route-why-head {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 8px 11px; background: none; border: 0; cursor: pointer;
+  font: inherit; color: inherit; text-align: left;
+}
+.route-why-head:hover { background: rgba(20, 82, 196, 0.05); }
+.route-why-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.6px; color: #5b6b7d;
+}
+.route-why-toggle { font-size: 15px; color: #8fa2b8; line-height: 1; }
+
+.route-why-reason {
+  margin: 0; padding: 0 11px 9px; font-size: 12.5px; line-height: 1.5; color: #16202c;
+}
+
+.route-why-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 14px;
+  padding: 0 11px 9px;
+}
+.route-why-grid > div { display: flex; justify-content: space-between; gap: 8px; }
+.route-why-grid dt { font-size: 11.5px; color: #5b6b7d; margin: 0; }
+.route-why-grid dd {
+  margin: 0; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.route-why-grid .risk-ok   { color: #0a7a0a; }
+.route-why-grid .risk-warn { color: #8a6100; }
+.route-why-grid .risk-crit { color: #b91c1c; }
+
+.route-why-driver {
+  margin: 0; padding: 7px 11px; font-size: 11.5px; color: #5b6b7d;
+  border-top: 1px dashed var(--line, #e2e8f0); background: #f7faff;
+}
+.route-why-caveat {
+  margin: 0; padding: 7px 11px; font-size: 11px; line-height: 1.45; color: #78350f;
+  background: #fffbeb; border-top: 1px solid #fde68a;
+}

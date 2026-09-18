@@ -16,6 +16,55 @@ function Row({ label, value, sub, icon }) {
   )
 }
 
+/**
+ * Why the router chose this track.
+ *
+ * The backend already computes all of this while costing the route; without it
+ * on screen the reader has to reverse-engineer the reasoning from a polyline,
+ * which is the job a decision-support system exists to do for them.
+ *
+ * The caveat is not decoration. Every route here is costed against historical
+ * reanalysis, and anyone acting on one needs to know that before they act.
+ */
+function RouteExplanation({ exp }) {
+  const [open, setOpen] = React.useState(true)
+  const risk = exp.maxIceRisk ?? 0
+  const tone = risk >= 0.66 ? 'crit' : risk >= 0.33 ? 'warn' : 'ok'
+
+  return (
+    <div className={`route-why ${tone}`}>
+      <button type="button" className="route-why-head" onClick={() => setOpen(!open)}>
+        <span className="route-why-title">Why this route</span>
+        <span className="route-why-toggle">{open ? '−' : '+'}</span>
+      </button>
+
+      {open && (
+        <>
+          <p className="route-why-reason">{exp.reason}</p>
+
+          <div className="route-why-grid">
+            <div><dt>Peak ice risk</dt><dd className={`risk-${tone}`}>{risk.toFixed(2)}</dd></div>
+            <div><dt>Track in ice</dt>
+                 <dd>{Math.round((exp.fractionOfTrackInIce ?? 0) * 100)}%</dd></div>
+            <div><dt>Ice fuel penalty</dt><dd>{exp.maxIceFuelPenalty}×</dd></div>
+            <div><dt>Icebergs tracked</dt><dd>{exp.icebergsTracked}</dd></div>
+            {exp.closestIcebergNm != null && (
+              <div><dt>Closest berg</dt>
+                   <dd className={exp.icebergIntersections ? 'risk-crit' : ''}>
+                     {exp.closestIcebergNm} nm</dd></div>
+            )}
+            <div><dt>Hull class</dt><dd>{exp.vesselIceClass}</dd></div>
+          </div>
+
+          <p className="route-why-driver">{exp.dominantCostTerm}</p>
+          <p className="route-why-caveat">{exp.caveat}</p>
+        </>
+      )}
+    </div>
+  )
+}
+
+
 export default function ResultsPanel({ route, loading, error }) {
   const {
     departureTimeUTC,
@@ -121,6 +170,7 @@ export default function ResultsPanel({ route, loading, error }) {
             : `Ice costing: ${route.iceDataSource}`}
         </div>
       )}
+      {route.explanation && <RouteExplanation exp={route.explanation} />}
       {route.estimatedFuelTons !== undefined && (
         <Row
           icon={<span style={{ fontSize: 13 }}>⛽</span>}
