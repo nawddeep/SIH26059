@@ -14,7 +14,7 @@ over a satellite link that barely exists below 70°S.
 
 | Model | Type | What it does | Measured performance |
 |-------|------|--------------|----------------------|
-| **Sea-ice forecaster** | Trained (PyTorch) | U-Net + ConvLSTM, **next-day** concentration over a 332×316 EPSG:3412 grid | At +1d beats climatology ~2.5× (0.044 vs 0.110) but is **beaten by persistence** (0.020). Not usable beyond +1d — see below |
+| **Sea-ice forecaster** | Trained (PyTorch) | U-Net + ConvLSTM, **next-day** concentration over a 332×316 EPSG:3412 grid | At +1d beats climatology 2.4× (0.047 vs 0.113) but is **beaten by persistence** (0.021), n=300. Next-day only — see below |
 | **Iceberg drift** | Trained (scikit-learn) | Two-stage HistGradientBoosting — moving/stationary gate, then u/v regressors | **3.91 km RMS** 24 h position error, 96.7% within 10 km, 9.5% skill vs constant-velocity |
 | **POLARIS ice risk** | Deterministic | IMO MSC.1/Circ.1519 Risk Index Outcome | Validated by property tests — a published standard has no accuracy figure |
 | **Ice-aware fuel model** | Deterministic | Speed collapse × power ramp, per Polar Class | Validated by property tests |
@@ -157,18 +157,24 @@ is worse than one that does not exist.
   every step, and by +5d it is beaten by climatology as well. Measured with
   `scripts/evaluation/rollout_comparison.py`:
 
-  | lead | model | persistence | climatology |
-  |------|-------|-------------|-------------|
-  | +1d  | 0.044 | **0.020** | 0.110 |
-  | +3d  | 0.103 | **0.036** | 0.110 |
-  | +5d  | 0.147 | **0.046** | 0.108 |
-  | +7d  | 0.182 | **0.055** | 0.108 |
-  | +14d | 0.231 | **0.084** | 0.111 |
+  | lead | model | persistence | climatology | n |
+  |------|-------|-------------|-------------|---|
+  | +1d  | 0.045 | **0.020** | 0.107 | 120 |
+  | +3d  | 0.106 | **0.036** | 0.107 | 116 |
+  | +5d  | 0.151 | **0.047** | 0.107 | 111 |
+  | +7d  | 0.177 | **0.055** | 0.107 | 104 |
 
   The older `baseline_comparison.py` reports better multi-day figures, but it
   applies a single forward pass at every horizon — grading a one-day forecast
-  against truth a week later. Those numbers are only valid at +1d. Both scripts
-  and both result files are committed so the difference can be inspected.
+  against truth a week later. Those numbers are only valid at +1d, where both
+  scripts agree to rounding (0.0466 vs 0.0467 at n=300). Both scripts and both
+  result files are committed so the difference can be inspected.
+
+  Both evaluations were previously run on ~60 of roughly 700 available test
+  samples, which produced numbers unstable enough to support a false conclusion:
+  an earlier `OPEN_PROBLEM.md` claimed the model beat persistence at +5d and +7d.
+  At n=300 it does not, and the correction is recorded there rather than quietly
+  removed.
 
   A direct multi-horizon architecture exists in
   `src/seaice_forecast/models/multi_horizon.py` and is the right way to serve

@@ -112,17 +112,46 @@ The model does train through this and reaches genuine skill (see below), but
 
 ## Result despite the problem
 
-Held-out test split 2017-2018, MAE over the active ice zone:
+Held-out test split 2017-2018, MAE over the active ice zone, **n = 300 forecast
+start dates**:
 
 | lead | persistence | climatology | model |
 |---|---|---|---|
-| +1d | 0.0249 | 0.2207 | 0.0312 |
-| +3d | 0.0456 | 0.2193 | 0.0473 |
-| +5d | 0.0608 | 0.2190 | **0.0607** |
-| +7d | 0.0743 | 0.2164 | **0.0732** |
+| +1d | **0.0205** | 0.1125 | 0.0466 |
+| +3d | **0.0364** | 0.1127 | 0.0552 |
+| +5d | **0.0459** | 0.1117 | 0.0613 |
+| +7d | **0.0524** | 0.1089 | 0.0654 |
 
-The model beats persistence at +5 and +7 days and beats climatology roughly 3x
-at all horizons — while training on a fraction of the data.
+The model beats climatology by roughly 2.4x at +1d, so it has learned real
+structure while training on a fraction of the data. **It does not beat
+persistence at any horizon.**
+
+### Correction
+
+An earlier version of this table reported persistence at 0.0608 (+5d) and
+0.0743 (+7d) and concluded the model beat it at both. That run used ~60 forecast
+start dates out of roughly 700 available, and the claim did not survive a larger
+sample: persistence at n=300 is 0.0459 and 0.0524. The model's own scores barely
+moved, so the original conclusion was sampling noise in the baseline, not skill
+in the model. The climatology column moved even more, from ~0.22 to ~0.11, for
+the same reason.
+
+Two lessons worth recording rather than quietly fixing: a held-out split of 700
+samples is not an excuse to evaluate on 60 of them, and a baseline that looks
+unexpectedly weak deserves more suspicion than a model that looks unexpectedly
+strong.
+
+### A second caveat on the multi-day rows
+
+The numbers above come from `scripts/evaluation/baseline_comparison.py`, which
+applies a single forward pass at every horizon. This checkpoint was trained with
+`forecast_horizon=1`, so at +7d that script grades a one-day forecast against
+truth a week later. **Only the +1d row is a valid comparison.**
+
+`scripts/evaluation/rollout_comparison.py` advances the model autoregressively
+instead, which is the honest multi-day test. Error compounds at every step and
+the model does considerably worse there — by +5d it is beaten by climatology as
+well as persistence. The scope this checkpoint supports is next-day only.
 
 ## The question
 

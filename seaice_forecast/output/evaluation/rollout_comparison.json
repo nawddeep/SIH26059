@@ -3,88 +3,60 @@
   "caveat": "The six atmospheric and oceanic channels are taken from the archive at every step, so these figures are an upper bound on operational skill: a real deployment feeds forecast forcing, which carries its own error.",
   "checkpoint": "models/checkpoints/phase3/sic_unet_convlstm_v001_best.pt",
   "test_split": "2017-01-01..2018-12-31",
-  "stride_days": 12,
+  "stride_days": 5,
   "horizons": {
     "+1d": {
-      "n_samples": 40,
+      "n_samples": 120,
       "model": {
-        "mae_ice": 0.0437
+        "mae_ice": 0.0454
       },
       "persistence": {
-        "mae_ice": 0.0197
+        "mae_ice": 0.02
       },
       "climatology": {
-        "mae_ice": 0.1098
+        "mae_ice": 0.1066
       },
       "beats_persistence": false,
       "beats_climatology": true
     },
     "+3d": {
-      "n_samples": 40,
+      "n_samples": 116,
       "model": {
-        "mae_ice": 0.1026
+        "mae_ice": 0.1062
       },
       "persistence": {
-        "mae_ice": 0.0358
+        "mae_ice": 0.0361
       },
       "climatology": {
-        "mae_ice": 0.1101
+        "mae_ice": 0.1069
       },
       "beats_persistence": false,
       "beats_climatology": true
     },
     "+5d": {
-      "n_samples": 40,
+      "n_samples": 111,
       "model": {
-        "mae_ice": 0.1471
+        "mae_ice": 0.1509
       },
       "persistence": {
-        "mae_ice": 0.0464
+        "mae_ice": 0.0471
       },
       "climatology": {
-        "mae_ice": 0.1083
+        "mae_ice": 0.1074
       },
       "beats_persistence": false,
       "beats_climatology": false
     },
     "+7d": {
-      "n_samples": 40,
+      "n_samples": 104,
       "model": {
-        "mae_ice": 0.1817
+        "mae_ice": 0.1768
       },
       "persistence": {
-        "mae_ice": 0.0554
+        "mae_ice": 0.0552
       },
       "climatology": {
-        "mae_ice": 0.1075
-      },
-      "beats_persistence": false,
-      "beats_climatology": false
-    },
-    "+10d": {
-      "n_samples": 40,
-      "model": {
-        "mae_ice": 0.209
-      },
-      "persistence": {
-        "mae_ice": 0.0687
-      },
-      "climatology": {
-        "mae_ice": 0.1096
-      },
-      "beats_persistence": false,
-      "beats_climatology": false
-    },
-    "+14d": {
-      "n_samples": 36,
-      "model": {
-        "mae_ice": 0.2309
-      },
-      "persistence": {
-        "mae_ice": 0.0843
-      },
-      "climatology": {
-        "mae_ice": 0.1112
+        "mae_ice": 0.1066
       },
       "beats_persistence": false,
       "beats_climatology": false
