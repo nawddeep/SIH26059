@@ -117,7 +117,8 @@ integration/         cross-component glue
 ./verify.sh --recompute     # slower: also re-derives the evaluation from the checkpoint
 ```
 
-Runs all three test suites (107 tests, including an end-to-end integration test
+Runs all four test suites (122 tests, including routing-safety tests for
+impassable ice, degraded data and degenerate requests, and an end-to-end integration test
 that drives telemetry → shore → backend → models → risk → route → fuel), loads
 each exported artifact from disk and
 calls `predict()` on it, checks the SHA-256 against `manifest.json`, and then

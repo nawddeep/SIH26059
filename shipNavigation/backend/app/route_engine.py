@@ -10,6 +10,7 @@ Stage E  time / ETA (kept isolated so Phase 2 can swap in current-aware timing)
 from __future__ import annotations
 
 import heapq
+from functools import lru_cache
 import math
 
 import shapely.geometry as sgeo
@@ -29,6 +30,109 @@ def get_sea_ice_concentration(lat: float, lon: float) -> float:
     """
     from .model_bridge import sic_at_point
     return sic_at_point(lat, lon)
+
+
+@lru_cache(maxsize=1)
+def current_iceberg_positions() -> tuple:
+    """Berg positions from the trained drift model, for the safety cost term.
+
+    Cached because A* queries it once per search, not per cell. Returns an empty
+    tuple when the model is unavailable, so routing degrades to "no iceberg
+    term" rather than to a fabricated one.
+    """
+    try:
+        from .model_bridge import _drift_bundle
+        _, frame = _drift_bundle()
+        latest = frame["date"].max()
+        recent = frame[frame["date"] == latest]
+        return tuple(
+            (float(r.lat), float(r.lon))
+            for r in recent.itertuples()
+            if -90.0 <= r.lat <= 90.0 and -180.0 <= r.lon <= 180.0
+        )
+    except Exception:  # noqa: BLE001 - no bergs is a valid state, a fake berg is not
+        return ()
+
+
+def explain_route(summary: dict, optimize_for: str, ice_class: str,
+                  berg_positions: tuple, legs: list) -> dict:
+    """Why this route, in terms a watch officer could act on.
+
+    A route is a decision. Returning only its geometry leaves the reader to
+    reverse-engineer the reasoning from a polyline, which is precisely what a
+    decision-support system is supposed to save them from. Every figure here is
+    already computed during costing; this assembles them and states which term
+    dominated.
+    """
+    import math as _m
+
+    max_risk = summary.get("maxPolarisRisk", 0.0)
+    mean_risk = summary.get("meanPolarisRisk", 0.0)
+    ice_nm = summary.get("totalDistanceInSeaIceNm", 0.0)
+    total_nm = summary.get("totalDistanceNm", 0.0) or 1.0
+    fuel_penalty = summary.get("maxIceFuelPenalty", 1.0)
+
+    # How close the track comes to a berg the drift model actually predicted.
+    closest_nm = None
+    within_20nm = 0
+    if berg_positions:
+        for leg in legs:
+            pts = leg.get("path", [])
+            for p1, p2 in zip(pts, pts[1:]):
+                mid_lat, mid_lon = (p1[0] + p2[0]) / 2.0, (p1[1] + p2[1]) / 2.0
+                for b_lat, b_lon in berg_positions:
+                    d = geo.haversine(mid_lat, mid_lon, b_lat, b_lon) / geo.NM_TO_M
+                    if closest_nm is None or d < closest_nm:
+                        closest_nm = d
+        if closest_nm is not None and closest_nm < 20.0:
+            within_20nm = 1
+
+    objective = {
+        "distance": "shortest navigable distance",
+        "time": "least time, accounting for current and wind along track",
+        "fuel": "least fuel, pricing ice through speed collapse and power rise",
+        "safety": "lowest exposure to ice, weather and icebergs",
+    }.get(optimize_for, optimize_for)
+
+    ice_fraction = ice_nm / total_nm
+    if max_risk >= 0.66:
+        driver = "POLARIS risk dominated: the hull class is marginal for the ice on this track"
+    elif fuel_penalty >= 2.0 and optimize_for == "fuel":
+        driver = "ice-driven fuel penalty dominated: burn rises sharply where the track crosses pack"
+    elif ice_fraction > 0.25:
+        driver = f"sea ice dominated: {ice_fraction * 100:.0f}% of the track is in ice"
+    elif within_20nm:
+        driver = "iceberg proximity dominated: the track passes within 20 nm of a predicted berg"
+    else:
+        driver = "open-water distance dominated: no term materially diverted the track"
+
+    return {
+        "objective": objective,
+        "distanceKm": round(total_nm * 1.852, 1),
+        "estimatedFuelTonnes": summary.get("estimatedFuelTons"),
+        "estimatedTimeHours": summary.get("totalDurationHours"),
+        "maxIceRisk": round(max_risk, 3),
+        "meanIceRisk": round(mean_risk, 3),
+        "maxIceConcentrationPct": summary.get("maxSeaIceConcentrationPct"),
+        "distanceInIceNm": round(ice_nm, 1),
+        "fractionOfTrackInIce": round(ice_fraction, 3),
+        "maxIceFuelPenalty": fuel_penalty,
+        "icebergsTracked": len(berg_positions),
+        "closestIcebergNm": round(closest_nm, 1) if closest_nm is not None else None,
+        "icebergIntersections": within_20nm,
+        "vesselIceClass": ice_class,
+        "iceDataSource": summary.get("iceDataSource"),
+        "dominantCostTerm": driver,
+        "reason": (
+            f"Optimised for {objective}. {driver.capitalize()}. "
+            f"Peak POLARIS risk {max_risk:.2f} for an {ice_class} hull; "
+            f"{ice_nm:.0f} nm of {total_nm:.0f} nm in ice."
+        ),
+        "caveat": (
+            "Costed against historical reanalysis, not a live feed. Advisory "
+            "only - it does not replace an ice navigator or official ice charts."
+        ),
+    }
 
 
 def ice_data_source() -> str:
@@ -221,8 +325,12 @@ class GridRouter:
         counter = 1
         closed = 0
 
-        # Known iceberg seeds for spatial safety proximity avoidance
-        iceberg_coords = [(-65.20, 72.50), (-58.40, 64.10), (62.10, -48.20)]
+        # Real iceberg positions from the trained drift model. This used to be
+        # three hardcoded seed coordinates, which meant the router avoided three
+        # fixed points in the ocean while a trained drift model sat unused beside
+        # it. If the model is unavailable the list is empty and the safety term
+        # contributes nothing - the route is never bent around invented bergs.
+        iceberg_coords = current_iceberg_positions()
 
         # A* reaches each cell from up to 8 neighbours, so an uncached lookup
         # repeats the same KD-tree query ~8x. The field is fixed for the whole
@@ -704,6 +812,21 @@ class RouteEngine:
 
         waypoints = [WP.from_maybe(w) for w in waypoints]
 
+        if len(waypoints) < 2:
+            raise RouteError("a route needs at least two waypoints")
+
+        # Two waypoints at the same position produce a single-point geometry,
+        # which shapely rejects with a GEOSException deep inside the smoother -
+        # surfacing to the caller as a 500 rather than a clear refusal. Catch it
+        # here, where the reason can still be stated. 0.001 deg is ~110 m, below
+        # any meaningful leg and well inside the grid's own resolution.
+        for i, (a, b) in enumerate(zip(waypoints, waypoints[1:])):
+            if abs(a.lat - b.lat) < 1e-3 and abs(a.lon - b.lon) < 1e-3:
+                raise RouteError(
+                    f"waypoints {i + 1} and {i + 2} are at the same position "
+                    f"({a.lat:.4f}, {a.lon:.4f}); a leg needs two distinct points"
+                )
+
         legs = []
         totals_nm = totals_eca = 0.0
         all_crossings = []
@@ -816,7 +939,7 @@ class RouteEngine:
         # Compute Safety Score (100 base)
         safety_score = max(0, min(100, round(100.0 - 0.5 * max_ice_conc - (15.0 if totals_eca > 500 else 0.0))))
 
-        return {
+        summary = {
             "legs": legs,
             "totalDistanceNm": round(totals_nm, 1),
             "totalDistanceInEcaNm": round(totals_eca, 1),
@@ -839,3 +962,11 @@ class RouteEngine:
                 "iceClass": ice_class,
             },
         }
+
+        # Attach the reasoning. A route is a decision, and a decision-support
+        # system that returns only geometry makes the reader reverse-engineer
+        # the reasoning from a polyline.
+        summary["explanation"] = explain_route(
+            summary, optimize_for, ice_class, current_iceberg_positions(), legs
+        )
+        return summary
