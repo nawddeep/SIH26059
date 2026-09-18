@@ -163,6 +163,36 @@ eight-year-old environment.
 
 ---
 
+## Operational ingestion
+
+`scripts/ingest.py` chains the existing downloaders, quality checks and
+regridding into one entry point:
+
+```bash
+python scripts/ingest.py --check                              # readiness, no network
+python scripts/ingest.py --plan  --start .. --end ..          # what is missing
+python scripts/ingest.py --fetch --start .. --end ..          # acquire
+```
+
+Current readiness on this machine: **2 of 3 sources**. ERA5 and CMEMS
+credentials are present; NSIDC needs a NASA Earthdata login in `~/.netrc`.
+
+`--fetch` deliberately does not run an unattended loop. Each source has its own
+rate limits and queueing behaviour — the CDS API queues requests for minutes to
+hours, and a naive retry loop gets an account throttled. The per-source scripts
+handle that properly and the orchestrator points at them.
+
+**The blocker is not plumbing, it is validation.** These models were trained on
+NSIDC CDR v6, a climate record tuned for consistency across decades. The
+near-real-time product (NSIDC-0081) is a different instrument calibration, ERA5T
+is subject to revision, and GLORYS12 is reanalysis rather than the
+analysis-forecast product. Feeding any of those to these weights would produce
+numbers that look right and are not comparable to anything in the published
+evaluation. Operational use needs revalidation against the near-real-time
+products first.
+
+---
+
 ## Provenance caveats
 
 - Every figure in this system is **historical reanalysis**. Nothing is real-time.
