@@ -82,20 +82,35 @@ def main() -> int:
                     check(f"README {lead} {key}", block[key]["mae_ice"], found)
 
     if OPEN_PROBLEM.exists() and BASELINE.exists():
-        print("\nOPEN_PROBLEM.md table vs baseline_comparison.json")
+        # OPEN_PROBLEM.md carries two tables and they come from different
+        # scripts: the +1d table is the single-pass baseline (the only horizon
+        # where that method is valid), the multi-day table is the rollout. The
+        # +1d lead therefore appears twice, once per source, and the order of
+        # appearance is what tells them apart.
+        print("\nOPEN_PROBLEM.md tables vs their source files")
         baseline = json.loads(BASELINE.read_text())
         op = OPEN_PROBLEM.read_text()
-        for lead, block in baseline.items():
-            rows = md_rows(op, lead)
-            if not rows:
-                continue
-            row = rows[0]
+
+        def check_row(label, row, block):
             # columns: lead | persistence | climatology | model
             for idx, key in ((1, "persistence"), (2, "climatology"), (3, "model")):
                 if idx < len(row) and block.get(key):
                     found = num(row[idx])
                     if found is not None:
-                        check(f"OPEN_PROBLEM {lead} {key}", block[key]["mae_ice"], found)
+                        check(f"{label} {key}", block[key]["mae_ice"], found)
+
+        rows_1d = md_rows(op, "+1d")
+        if rows_1d and baseline.get("+1d"):
+            check_row("OPEN_PROBLEM +1d (baseline)", rows_1d[0], baseline["+1d"])
+        if len(rows_1d) > 1 and rollout.get("+1d"):
+            check_row("OPEN_PROBLEM +1d (rollout)", rows_1d[1], rollout["+1d"])
+
+        for lead, block in rollout.items():
+            if lead == "+1d":
+                continue
+            rows = md_rows(op, lead)
+            if rows:
+                check_row(f"OPEN_PROBLEM {lead} (rollout)", rows[0], block)
 
     if DRIFT.exists():
         print("\nREADME.md drift figure vs drift_twostage_metrics.json")

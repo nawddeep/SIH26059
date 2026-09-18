@@ -117,7 +117,9 @@ integration/         cross-component glue
 ./verify.sh --recompute     # slower: also re-derives the evaluation from the checkpoint
 ```
 
-Runs both test suites (96 tests), loads each exported artifact from disk and
+Runs all three test suites (107 tests, including an end-to-end integration test
+that drives telemetry → shore → backend → models → risk → route → fuel), loads
+each exported artifact from disk and
 calls `predict()` on it, checks the SHA-256 against `manifest.json`, and then
 checks that **every performance figure in this README and in `OPEN_PROBLEM.md`
 matches the JSON the evaluation wrote** — 26 figures, and a mismatch fails the

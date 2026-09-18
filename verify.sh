@@ -52,6 +52,9 @@ step "Test suite: seaice_forecast"
 step "Test suite: iceberg-drift"
 (cd iceberg-drift && "$PY" -m pytest tests/ -q --no-header 2>&1 | tail -1) || fail=1
 
+step "End-to-end integration: telemetry -> shore -> backend -> models -> route"
+"$PY" -m pytest integration/ -q --no-header 2>&1 | tail -1 || fail=1
+
 step "Exported model artifacts: load from disk and run"
 "$PY" - <<'PYEOF' || exit 1
 import hashlib, json, sys
