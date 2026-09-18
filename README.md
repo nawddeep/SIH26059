@@ -97,6 +97,19 @@ rather than costing a route against a fabricated ice field.
 
 ---
 
+## Documentation
+
+| Document | Covers |
+|---|---|
+| [`docs/DATA_LINEAGE.md`](docs/DATA_LINEAGE.md) | Every dataset from raw source to route planner: resolution, date range, preprocessing, splits, missing-data handling, coordinate systems |
+| [`docs/ROUTE_COST.md`](docs/ROUTE_COST.md) | The A* cost function as implemented — every term, its weight, and why routes come out as they do |
+| [`docs/FALLBACK.md`](docs/FALLBACK.md) | What happens when a model or dataset is unavailable, and why climatology is deliberately not a routing fallback |
+| [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) | Telemetry gateway: threats, mitigations, tests, and the gaps that remain |
+| [`docs/models/sea_ice_model_card.md`](docs/models/sea_ice_model_card.md) | Sea-ice forecaster: architecture, training, evaluation, limitations, intended and unintended use |
+| [`docs/models/iceberg_model_card.md`](docs/models/iceberg_model_card.md) | Iceberg drift predictor: same |
+
+---
+
 ## Layout
 
 ```
