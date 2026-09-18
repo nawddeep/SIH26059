@@ -1,0 +1,389 @@
+"""FastAPI backend for the Ship Route Planner.
+
+POST /api/route        compute a sea route
+GET  /api/ports?q=     ports autocomplete
+GET  /api/geocode      reverse lookup for dropped pins / typed coords
+GET  /api/ecas         ECA polygons as GeoJSON (for the basemap overlay)
+GET  /api/chokepoints  chokepoint crossing lines as GeoJSON
+GET  /api/health
+"""
+
+from __future__ import annotations
+
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from typing import Optional
+
+import logging
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+
+from .datastore import Datastore
+from .mask import LandMask
+from .route_engine import RouteEngine, RouteError, build_waterway_midline
+
+
+class Waypoint(BaseModel):
+    id: str = ""
+    label: str
+    countryCode: Optional[str] = ""
+    lat: float
+    lon: float
+    isPort: bool = True
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "label": self.label,
+            "countryCode": self.countryCode or "",
+            "lat": self.lat,
+            "lon": self.lon,
+            "isPort": self.isPort,
+        }
+
+
+class RouteRequest(BaseModel):
+    waypoints: list[Waypoint] = Field(min_length=2)
+    speedKnots: float = Field(gt=0, description="1-24 kn in the UI; not hard-clamped server-side")
+    departureTimeUTC: str = Field(default="", description="ISO 8601")
+    optimizeFor: str = "distance"  # 'distance' | 'time' (@see phase 2)
+    vesselType: str = Field(default="cargo", description="cargo, tanker, passenger, service, fishing, icebreaker, research, other")
+    draftMeters: float = Field(default=10.0, description="vessel operational draft in meters")
+    iceClass: str = Field(default="none", description="none, pc1_pc7, icebreaker")
+
+
+def _parse_departure(raw: str) -> datetime:
+    raw = (raw or "").strip()
+    if not raw:
+        return datetime.now(timezone.utc).replace(tzinfo=None, second=0, microsecond=0)
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise HTTPException(422, f"invalid departureTimeUTC: {exc}") from exc
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+import uuid
+from .weather_engine import get_route_weather
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    store = Datastore()
+    mask = LandMask()
+    for cp in store.chokepoints:
+        if cp["kind"] == "strait" and cp["line"]:
+            mask.carve_water([(lat, lon) for lon, lat in cp["line"]])
+    for w in store.waterways:
+        mask.carve_water(build_waterway_midline(w))
+    engine = RouteEngine(mask, store.ecas, store.chokepoints, waterways=store.waterways)
+    app.state.datastore = store
+    app.state.engine = engine
+    app.state.routes = {}
+    app.state.booted = True
+    print("[api] ready", flush=True)
+    yield
+
+
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title="Ship Route Planner", version="1.0.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/api/health")
+async def health():
+    return {"ok": True, "booted": getattr(app.state, "booted", False)}
+
+
+@app.post("/api/route")
+async def compute_route(req: RouteRequest):
+    try:
+        engine: RouteEngine = app.state.engine
+    except AttributeError:
+        raise HTTPException(503, "route engine not ready")
+    dep = _parse_departure(req.departureTimeUTC)
+    try:
+        res = engine.compute_route(
+            [w for w in req.waypoints],
+            speed_knots=req.speedKnots,
+            departure_time_utc=dep,
+            optimize_for=req.optimizeFor or "distance",
+            vessel_type=req.vesselType,
+            draft_meters=req.draftMeters,
+            ice_class=req.iceClass,
+        )
+        route_id = str(uuid.uuid4())
+        res["routeId"] = route_id
+        res["departureTimeUTC"] = dep.strftime("%Y-%m-%dT%H:%M:%SZ")
+        if hasattr(app.state, "routes"):
+            app.state.routes[route_id] = res
+            # Keep cache bounded to 50 routes
+            if len(app.state.routes) > 50:
+                oldest_key = next(iter(app.state.routes))
+                app.state.routes.pop(oldest_key, None)
+        return res
+    except RouteError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@app.get("/api/route-weather")
+async def route_weather(
+    routeId: str = Query(default=""),
+    departureTime: str = Query(default=""),
+    speedKnots: float = Query(default=15.0),
+):
+    dep = _parse_departure(departureTime)
+    routes_cache = getattr(app.state, "routes", {})
+    route_obj = routes_cache.get(routeId)
+    
+    if not route_obj:
+        if not routeId and len(routes_cache) > 0:
+            # Fall back to most recent computed route
+            route_obj = list(routes_cache.values())[-1]
+
+    if not route_obj:
+        return {"samples": []}
+
+    return get_route_weather(route_obj, dep)
+
+
+
+
+@app.get("/api/ports")
+async def search_ports(q: str = Query(default="", max_length=64)):
+    return app.state.datastore.search_ports(q)
+
+
+@app.get("/api/geocode")
+async def geocode(lat: float = Query(..., ge=-90, le=90), lon: float = Query(..., ge=-180, le=180)):
+    return app.state.datastore.reverse_geocode(lat, lon)
+
+
+@app.get("/api/ecas")
+async def ecas():
+    return app.state.datastore.ecas_geojson()
+
+
+@app.get("/api/chokepoints")
+async def chokepoints():
+    return app.state.datastore.chokepoints_geojson()
+
+
+@app.get("/api/icebergs")
+async def icebergs(
+    startTime: str = Query(default=""),
+    endTime: str = Query(default=""),
+    stepHours: float = Query(default=1.0, gt=0, le=24),
+):
+    from datetime import timedelta
+    dep_start = _parse_departure(startTime)
+    if endTime:
+        dep_end = _parse_departure(endTime)
+    else:
+        dep_end = dep_start + timedelta(days=7)
+    try:
+        from .model_bridge import icebergs_with_trajectories_real
+        return icebergs_with_trajectories_real(dep_start, dep_end, step_hours=stepHours)
+    except Exception as exc:  # noqa: BLE001 - report, never 500 the map
+        logger.warning("drift model unavailable: %s", exc)
+        return []
+
+
+@app.get("/api/sea-ice")
+async def sea_ice(date: str = Query(default="")):
+    """Sea-ice concentration from the trained U-Net+ConvLSTM forecaster.
+
+    Returns an empty field with an error rather than substituting simulated
+    ice. A map that silently shows invented ice is worse than a map that shows
+    none: the first misleads a navigator, the second tells them to look
+    elsewhere.
+    """
+    try:
+        from .model_bridge import sea_ice_geojson_real
+        return sea_ice_geojson_real(date or None)
+    except Exception as exc:  # noqa: BLE001 - report, never 500 the map
+        logger.warning("sea-ice model unavailable: %s", exc)
+        return {"type": "FeatureCollection", "features": [],
+                "error": f"{type(exc).__name__}: {exc}", "source": "unavailable"}
+
+
+@app.get("/api/ocean-currents")
+async def ocean_currents(date: str = Query(default="")):
+    """Real GLORYS12 surface currents. No simulated substitute."""
+    try:
+        from .model_bridge import ocean_currents_geojson_real
+        return ocean_currents_geojson_real(date or None)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("currents data unavailable: %s", exc)
+        return {"type": "FeatureCollection", "features": [],
+                "error": f"{type(exc).__name__}: {exc}", "source": "unavailable"}
+
+
+@app.get("/api/wind")
+async def wind(date: str = Query(default="")):
+    """Real ERA5 10 m wind. No simulated substitute."""
+    try:
+        from .model_bridge import wind_geojson_real
+        return wind_geojson_real(date or None)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("wind data unavailable: %s", exc)
+        return {"type": "FeatureCollection", "features": [],
+                "error": f"{type(exc).__name__}: {exc}", "source": "unavailable"}
+
+
+@app.get("/api/ice-risk")
+async def ice_risk(date: str = Query(default=""), polarClass: str = Query(default="PC4")):
+    """IMO POLARIS navigational ice risk, derived from the SIC forecast."""
+    try:
+        from .model_bridge import ice_risk_geojson_real
+        return ice_risk_geojson_real(date or None, polar_class=polarClass)
+    except Exception as exc:  # noqa: BLE001 - degrade like the sibling layers
+        logger.warning("ice-risk model unavailable: %s", exc)
+        return {"type": "FeatureCollection", "features": [],
+                "error": "model unavailable", "source": "unavailable"}
+
+
+@app.get("/api/model-tests")
+async def model_tests():
+    """Verifiable evidence for the model test dashboard.
+
+    Loads each artifact, runs it, and returns the result alongside the held-out
+    metrics from the training runs, so the page shows measurements rather than
+    claims.
+    """
+    try:
+        from .model_tests import run_model_tests
+        return run_model_tests()
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("model tests failed")
+        return {"error": f"{type(exc).__name__}: {exc}", "components": []}
+
+
+@app.get("/api/model-status")
+async def model_status():
+    """Which trained models are actually live behind the map.
+
+    Every data endpoint returns an empty field rather than failing when a
+    model is missing, so a rendering map is not evidence the models loaded.
+    This runs them.
+    """
+    try:
+        from .model_bridge import model_status as status
+        return status()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("model status unavailable: %s", exc)
+        return {
+            "allLive": False, "liveComponents": [], "missingArtifacts": [],
+            "components": {}, "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+@app.get("/api/weather-heatmap")
+async def weather_heatmap():
+    """Removed: this layer had no real data source behind it.
+
+    It synthesised a hazard index from invented temperature, wind and current
+    fields. Kept as an endpoint so the frontend gets an empty layer rather than
+    a 404, but it will stay empty until a real product backs it.
+    """
+    return {"type": "FeatureCollection", "features": [],
+            "error": "no real data source for this layer", "source": "unavailable"}
+
+
+# ---------------------------------------------------------------- explorer
+# Interactive counterparts to /api/model-tests. Each one loads a .pkl from
+# model_exports/ and runs it against inputs the reader chose, so the dashboard
+# shows the artifact answering a question rather than replaying a fixed sample.
+def _explorer_error(exc: Exception) -> dict:
+    logger.warning("model explorer: %s", exc)
+    return {"error": f"{type(exc).__name__}: {exc}"}
+
+
+@app.get("/api/model-explorer/curves")
+async def explorer_curves(distanceKm: float = Query(default=25.0, ge=1.0, le=500.0)):
+    """Risk and fuel swept across concentration, for every Polar Class."""
+    try:
+        from .model_explorer import curves
+        return curves(distanceKm)
+    except Exception as exc:  # noqa: BLE001
+        return _explorer_error(exc)
+
+
+@app.get("/api/model-explorer/point")
+async def explorer_point(
+    sic: float = Query(default=0.7, ge=0.0, le=1.0),
+    polarClass: str = Query(default="PC4", max_length=16),
+    distanceKm: float = Query(default=25.0, ge=1.0, le=500.0),
+):
+    """One operating point, evaluated by the two deterministic artifacts."""
+    try:
+        from .model_explorer import point
+        return point(sic, polarClass, distanceKm)
+    except Exception as exc:  # noqa: BLE001
+        return _explorer_error(exc)
+
+
+@app.get("/api/model-explorer/seaice")
+async def explorer_seaice(date: str = Query(default="2018-12-20", max_length=10)):
+    """A full 332x316 forecast grid from seaice_forecast.pkl, packed for canvas."""
+    try:
+        from .model_explorer import seaice_field
+        return seaice_field(date)
+    except Exception as exc:  # noqa: BLE001
+        return _explorer_error(exc)
+
+
+@app.get("/api/model-explorer/drift")
+async def explorer_drift(
+    date: str = Query(default="", max_length=10),
+    limit: int = Query(default=400, ge=1, le=2000),
+):
+    """Per-berg 24 h drift vectors from iceberg_drift.pkl."""
+    try:
+        from .model_explorer import drift_field
+        return drift_field(date, limit)
+    except Exception as exc:  # noqa: BLE001
+        return _explorer_error(exc)
+
+
+# --------------------------------------------------------------- telemetry
+# Live vessel state forwarded by the shipboard gateway (Raspberry Pi) via the
+# shore listener. Display only - see app/telemetry.py for why this must not be
+# wired into the models.
+class TelemetryEnvelope(BaseModel):
+    seq: Optional[int] = None
+    source: str = ""
+    timestamp: str = ""
+    priority: int = 0
+    payload: dict = Field(default_factory=dict)
+
+
+@app.post("/api/telemetry/ingest")
+async def telemetry_ingest(envelope: TelemetryEnvelope):
+    """Accept one record from the shore listener."""
+    from .telemetry import ingest
+    return ingest(envelope.model_dump())
+
+
+@app.get("/api/telemetry/live")
+async def telemetry_live():
+    """Last-known vessel position and instrument readings."""
+    from .telemetry import live
+    return live()
+
+
+@app.post("/api/telemetry/reset")
+async def telemetry_reset():
+    """Clear the state so a demo starts from an empty dashboard."""
+    from .telemetry import reset
+    return reset()

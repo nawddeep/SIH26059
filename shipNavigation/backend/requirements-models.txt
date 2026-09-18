@@ -1,0 +1,15 @@
+# Dependencies for the trained-model bridge (app/model_bridge.py).
+#
+# Without these the app still starts, but every model-backed layer silently
+# degrades to synthetic data. start.sh prefers the existing
+# seaice_forecast/venv, which already has them; install these only when running
+# the backend in a standalone environment.
+-r requirements.txt
+
+torch>=2.0.0
+joblib>=1.3.0
+scikit-learn>=1.3.0
+pandas>=2.0.0
+scipy>=1.10.0
+numpy>=1.24.0
+httpx>=0.27.0
