@@ -83,3 +83,8 @@ wandb/
 
 # Environment
 .env.local
+# The evaluation summaries are evidence, not build output. README.md and
+# verify.sh both quote them, so a clone without them cannot check any
+# performance claim this project makes. They are 4 KB each.
+!output/evaluation/baseline_comparison.json
+!output/drift_twostage_metrics.json

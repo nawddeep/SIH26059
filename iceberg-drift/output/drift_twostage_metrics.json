@@ -1,0 +1,20 @@
+{
+  "constant": {
+    "pos_err_24h_km_rms": 4.324355521709797,
+    "pos_err_24h_km_median": 0.7660345656691153,
+    "within_10km_pct": 95.72649572649573,
+    "skill_vs_constant": 0.0
+  },
+  "single_stage_gbm": {
+    "pos_err_24h_km_rms": 4.003910572998404,
+    "pos_err_24h_km_median": 0.3696290894074384,
+    "within_10km_pct": 96.49122807017544,
+    "skill_vs_constant": 0.07410235978578683
+  },
+  "two_stage": {
+    "pos_err_24h_km_rms": 3.913429679025694,
+    "pos_err_24h_km_median": 0.18575422866346933,
+    "within_10km_pct": 96.7161493477283,
+    "skill_vs_constant": 0.09502591556617146
+  }
+}
