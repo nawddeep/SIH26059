@@ -696,3 +696,38 @@ async def uncertainty_at(
         return sea_ice_uncertainty(sic, gradient)
     except Exception as exc:  # noqa: BLE001
         return {"error": f"{type(exc).__name__}: {exc}"}
+
+
+# ----------------------------------------------------------- bridge console
+# Shapes the local-dashboard/ console expects, served from the telemetry
+# gateway and the trained models. Its original backend generated these from
+# random(); that backend was dropped rather than imported.
+@app.get("/api/vessel")
+async def console_vessel():
+    from .bridge_console import vessel
+    return vessel()
+
+
+@app.get("/api/contacts/ais")
+async def console_ais():
+    from .bridge_console import contacts_ais
+    return contacts_ais()
+
+
+@app.get("/api/contacts/radar")
+async def console_radar():
+    """No radar source exists; this reports that rather than inventing contacts."""
+    from .bridge_console import contacts_radar
+    return contacts_radar()
+
+
+@app.get("/api/environment")
+async def console_environment():
+    from .bridge_console import environment
+    return environment()
+
+
+@app.get("/api/dashboard")
+async def console_dashboard():
+    from .bridge_console import dashboard
+    return dashboard()

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Brought in without these:
+#   backend/  - generated telemetry with random(); replaced by the real backend
+#   models/   - unused 102 MB Qwen3-8B LoRA adapter, referenced nowhere
+node_modules/
+.venv/
+dist/
+models/

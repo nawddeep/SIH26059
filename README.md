@@ -177,6 +177,7 @@ iceberg-drift/       iceberg drift model, training, evaluation
 model_exports/       the four exported artifacts + manifest.json
 shipNavigation/      FastAPI backend + React frontend + model dashboard
 telemetry-gateway/   shipboard data acquisition and satellite uplink
+local-dashboard/     bridge console (React 19 + MapLibre), served by the real backend
 integration/         cross-component glue
 ```
 

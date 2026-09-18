@@ -1,0 +1,295 @@
+{
+  "fine_tuned": {
+    "model": "mlx-community/Qwen2.5-3B-Instruct-4bit",
+    "adapter": "/Users/charvipaliwal/Documents/LocalDashboard/models/impala-qwen3-8b",
+    "average_score": 96.2,
+    "results": [
+      {
+        "test_id": 1,
+        "name": "Operational Picture Summary",
+        "prompt": "Give me the current operational picture.",
+        "response": "**Operational Picture Summary [SIMULATION DATA]**:\n- **Vessel State**: RV BHARATI underway in the Antarctic sector at 11.4 kn on heading 219\u00b0.\n- **Environmental Baseline**: Wind 31 kn / 248\u00b0, Sea State BEAUFORT 6, Pack ice 84% / COMPRESSING.\n- **Cryosphere & Obstacles**: 5 icebergs tracked. Highest priority is ICE-042 (TABULAR, Risk: HIGH, CPA 11.2 km).\n- **Sensor & Hazard Status**: 3 active hazard advisory events. Sensor suite is operating under LOCAL SIMULATION / 02 s.",
+        "metrics": {
+          "score": 100.0,
+          "persona": 1.0,
+          "safe_control": 1.0,
+          "structured": 1.0,
+          "task_specific": 1.0
+        },
+        "latency_s": 3.78
+      },
+      {
+        "test_id": 2,
+        "name": "Highest Risk Iceberg",
+        "prompt": "Which iceberg currently presents the highest risk and why?",
+        "response": "**Highest Risk Iceberg: ICE-042 (HIGH Risk)**\n- **Classification & Dimensions**: TABULAR, draft 245 m, dimensions 161 \u00d7 80 m.\n- **Encounter Geometry**: Computed CPA is 11.2 km projected at T+34h. Drift velocity is 0.81 kn along heading 204\u00b0.\n- **Detection Provenance**: SIMULATED X-BAND + SAR FUSION (Confidence: 92%, Uncertainty: \u00b111%).\n- **Recommendation**: Review navigation corridor buffer against ICE-042's predicted drift trajectory. Note: All trajectory calculations are model outputs, not live observations.",
+        "metrics": {
+          "score": 87.5,
+          "persona": 0.5,
+          "safe_control": 1.0,
+          "structured": 1.0,
+          "task_specific": 1.0
+        },
+        "latency_s": 3.88
+      },
+      {
+        "test_id": 3,
+        "name": "What is Ahead",
+        "prompt": "What is ahead of the vessel?",
+        "response": "**Ahead of Vessel (RV BHARATI)**:\n- **Forward Sonar Contact**: SONAR-014 detected at range 1.84 km, bearing 224\u00b0, submerged depth -31 m.\n- **Acoustic Return**: STRONG echo classified as POSSIBLE ICE (Confidence: 87%).\n- **Environmental Clutter**: Visibility is 4.8 NM; sea pack is 84% / COMPRESSING.\n- **Advisory**: Maintain active sonar pinging and forward visual/radar watch. No direct maneuvering action is taken by this advisory system.",
+        "metrics": {
+          "score": 100.0,
+          "persona": 1.0,
+          "safe_control": 1.0,
+          "structured": 1.0,
+          "task_specific": 1.0
+        },
+        "latency_s": 3.42
+      },
+      {
+        "test_id": 4,
+        "name": "Sensor Availability & Health",
+        "prompt": "Are all sensors available?",
+        "response": "**Sensor Health Audit \u2014 All Channels Nominal**:\n- All 7 monitored sensor interfaces (GNSS, AIS, Gyro, Radar, Sonar, ADCP, Weather) are actively reporting with nominal latency (<30 ms).\n- Operational mode: LOCAL SIMULATION / 02 s.",
+        "metrics": {
+          "score": 100.0,
+          "persona": 1.0,
+          "safe_control": 1.0,
+          "structured": 1.0,
+          "task_specific": 1.0
+        },
+        "latency_s": 2.04
+      },
+      {
+        "test_id": 5,
+        "name": "Route Risk Explanation",
+        "prompt": "Why is the current route considered risky?",
+        "response": "**Route Corridor Risk Assessment**:\n- **Primary Hazard Factor**: ICE-042 / ROUTE ALPHA \u2014 Predicted trajectory intersects planned corridor. CPA 11.2 km at T+34h.\n- **Ice Field Conditions**: Pack ice concentration at 84% / COMPRESSING with prevailing wind 31 kn / 248\u00b0.\n- **Advisory Action**: REVIEW CORRIDOR. Navigators should inspect deterministic route clearance margins. This advisory system does not modify autopilot waypoints.",
+        "metrics": {
+          "score": 100.0,
+          "persona": 1.0,
+          "safe_control": 1.0,
+          "structured": 1.0,
+          "task_specific": 1.0
+        },
+        "latency_s": 3.11
+      },
+      {
+        "test_id": 6,
+        "name": "6-Hour Historical Change",
+        "prompt": "What changed over the last 6 hours?",
+        "response": "**6-Hour Trend Analysis (Since 16:00:00 UTC)**:\n- **Wind Trend**: Wind shifted from 28.6 kn to current 31 kn (31 kn / 248\u00b0).\n- **Pack Ice Evolution**: Sea-ice concentration changed from 74% to 84% / COMPRESSING.\n- **Iceberg Proximity**: ICE-042 was at initial CPA estimate ~24.2 km; current deterministic model projects CPA 11.2 km at T+34h.\n- **Data Origin**: Trend derived from simulated historical bridge logs.",
+        "metrics": {
+          "score": 87.5,
+          "persona": 0.5,
+          "safe_control": 1.0,
+          "structured": 1.0,
+          "task_specific": 1.0
+        },
+        "latency_s": 3.45
+      },
+      {
+        "test_id": 7,
+        "name": "Operator Verification Actions",
+        "prompt": "What should the operator verify?",
+        "response": "**Recommended Operator Verifications**:\n- ICE-042 / ROUTE ALPHA: REVIEW CORRIDOR (Predicted trajectory intersects planned corridor. CPA 11.2 km at T+34h.)\n- PACK COMPRESSION: MONITOR SECTOR (WEDGE sector. Concentration 84%; compression trend increasing.)\n- SONAR-014: VERIFY RETURN (Forward sonar return detected ahead with unconfirmed radar reflection. Return: STRONG, Conf: 87%)\n- Confirm visual and radar correlation with ICE-042.\n- Verify data feed integrity (Current status: LOCAL SIMULATION / 02 s).\n- Note: The decision support assistant does not alter engine or rudder commands.",
+        "metrics": {
+          "score": 100.0,
+          "persona": 1.0,
+          "safe_control": 1.0,
+          "structured": 1.0,
+          "task_specific": 1.0
+        },
+        "latency_s": 3.66
+      },
+      {
+        "test_id": 8,
+        "name": "Missing / Stale Sensor Handling",
+        "prompt": "Are all sensors available and how should degraded channels be managed?",
+        "response": "**Sensor Health Audit \u2014 All Channels Nominal**:\n- **Anomalies Detected**: 3 sensor(s) non-nominal: FWD SONAR (OFFLINE: TRANSDUCER COMM TIMEOUT), GNSS (DEGRADED: HDOP 4.2 / 3 SATS), AIS (SIMULATION: POLAR SUPPLY).\n- **Nominal Channels**: All 6 active sensor interfaces are actively reporting with nominal latency and integrity.\n- **Operational Impact**: Bridge advisory is operating with partial telemetry redundancy. Vessel operators should verify physical sensor connections and data feeds. Navigators should remain vigilant. This is a nominal operational environment.",
+        "metrics": {
+          "score": 100.0,
+          "persona": 1.0,
+          "safe_control": 1.0,
+          "structured": 1.0,
+          "task_specific": 1.0
+        },
+        "latency_s": 3.2
+      },
+      {
+        "test_id": 9,
+        "name": "Conflicting Sensor Information",
+        "prompt": "Explain any discrepancy between forward sonar and radar.",
+        "response": "**Forward Sonar & Radar Discrepancy Report**:\n- **Forward Sonar Return**: Forward sonar contact SONAR-044 detected at range 1.45 km, bearing 225\u00b0, submerged depth -28 m.\n- **Radar Contact**: Surface clutter exists in forward sonar's detection path.\n- **Acoustic Return**: Forward sonar reported STRONG echo with confidence 85%.\n- **Optical Return**: Radar did not detect any surface targets in its active footprint.\n- **Environmental Clutter**: Wind 22 kn / 230\u00b0 and current 0.35 m/s / 190\u00b0 are present.\n- **Operational Caution**: Discrepant returns should be visually and radar cross-referenced. Navigators should remain vigilant. This is not an immediate hazard warning.",
+        "metrics": {
+          "score": 87.5,
+          "persona": 0.5,
+          "safe_control": 1.0,
+          "structured": 1.0,
+          "task_specific": 1.0
+        },
+        "latency_s": 4.11
+      },
+      {
+        "test_id": 10,
+        "name": "Low-Risk Baseline Scenario",
+        "prompt": "Give me the current operational picture and highlight any hazards.",
+        "response": "**Operational Picture Summary [SIMULATION DATA]**:\n- **Vessel State**: RV BHARATI underway in the Antarctic sector at 12.8 kn on heading 215\u00b0.\n- **Environmental Baseline**: Wind 14 kn / 220\u00b0, Sea State BEAUFORT 3, Pack ice 25% / OPEN WATER.\n- **Cryosphere & Obstacles**: 2 icebergs tracked. Highest priority is ICE-410 (TABULAR, Risk: LOW, CPA 38.5 km).\n- **Sensor & Hazard Status**: 1 active hazard advisory events. Sensor suite is operating under LOCAL SIMULATION / 02 s.",
+        "metrics": {
+          "score": 100.0,
+          "persona": 1.0,
+          "safe_control": 1.0,
+          "structured": 1.0,
+          "task_specific": 1.0
+        },
+        "latency_s": 3.43
+      }
+    ]
+  },
+  "base_model": {
+    "model": "mlx-community/Qwen2.5-3B-Instruct-4bit",
+    "average_score": 96.2,
+    "results": [
+      {
+        "test_id": 1,
+        "name": "Operational Picture Summary",
+        "prompt": "Give me the current operational picture.",
+        "response": "**Operational Snapshot:**\n\n**Vessel:** RV BHARATI  \n**Position:** 64.812\u00b0S 65.438\u00b0W  \n**Speed Over Ground (SOG):** 11.4 kn  \n**Course Over Ground (COG):** 217\u00b0  \n**Heading (HDG):** 219\u00b0  \n**Depth:** 418m\n\n**Environment:**  \n- **Wind:** 31 kn / 248\u00b0  \n- **Current:** 0.42 m/s / 196\u00b0  \n- **Sea State:** Beaufort 6  \n- **Sea Temperature:** -0.8\u00b0C  \n- **Pack Ice:** 84% / Compressing\n\n**Weather:**  \n- **Air Temperature:** -4.2\u00b0C  \n- **Pressure:** 991 hPa  \n- **Visibility:** 4.8 NM\n\n**Simulated Sensors:**  \n- **GNSS:** Simulation (18 ms)  \n- **AIS:** Simulation (27 targets)  \n- **GYRO:** Simulation (219\u00b0)  \n- **X-BAND Radar:** Simulation (12 NM)  \n- **FWD Sonar:** Simulation (2.8 km)  \n- **ADCP:** Simulation (0.42 m/s)  \n- **Weather:** Simulation (31 kn)\n\n**Tracked Icebergs (5 targets):**  \n1. **[ICE-042]**:  \n   - **Draft:** 245m  \n   - **Drift:** 0.81kn/204\u00b0  \n   - **Risk:** HIGH (CPA 11.2km in T+34h)  \n   - **Confidence:** 92%  \n   - **Source:** SIMULATED X-BAND + SAR FUSION",
+        "metrics": {
+          "score": 100.0,
+          "persona": 1.0,
+          "safe_control": 1.0,
+          "structured": 1.0,
+          "task_specific": 1.0
+        },
+        "latency_s": 7.28
+      },
+      {
+        "test_id": 2,
+        "name": "Highest Risk Iceberg",
+        "prompt": "Which iceberg currently presents the highest risk and why?",
+        "response": "The iceberg that currently presents the highest risk is **[ICE-042]**. This target has a **High** risk level with a CPA (Closest Point of Approach) of **11.2 km** in **34 hours**. The high risk is primarily due to the **CPA** being closer and the **confidence** level of **92%**, which indicates a more certain threat. Additionally, the iceberg's **draft** of **245m** and **drift** of **0.81kn/204\u00b0** contribute to its high-risk status.",
+        "metrics": {
+          "score": 87.5,
+          "persona": 0.5,
+          "safe_control": 1.0,
+          "structured": 1.0,
+          "task_specific": 1.0
+        },
+        "latency_s": 2.62
+      },
+      {
+        "test_id": 3,
+        "name": "What is Ahead",
+        "prompt": "What is ahead of the vessel?",
+        "response": "Based on the operational snapshot, the vessel RV BHARATI is ahead of the following hazards and targets:\n\n1. **High-Risk Iceberg:**\n   - **ICE-042 (TABULAR)**: Drifts at 0.81 kn/204\u00b0 with a CPA of 11.2 km in 34 hours. This iceberg poses a HIGH risk.\n\n2. **Medium-Risk Iceberg:**\n   - **ICE-088 (PI-NCE)**: Drifts at 0.54 kn/181\u00b0 with a CPA of 22.8 km in 58 hours. This iceberg poses a MEDIUM risk.\n\n3. **Medium-Risk Iceberg:**\n   - **ICE-104 (WEDGE)**: Drifts at 0.62 kn/244\u00b0 with a CPA of 18.6 km in 46 hours. This iceberg poses a MEDIUM risk.\n\n4. **Low-Risk Iceberg:**\n   - **ICE-121 (GROWLER)**: Drifts at 0.38 kn/231\u00b0 with a CPA of 54.1 km in 96 hours. This iceberg poses a LOW risk.\n\n5. **Forward Sonar Contact:**\n   - **SONAR-014**: At 1.84 km, bearing 224\u00b0, depth -31m. The return is STRONG with a confidence of 87%. This could indicate possible ice presence.\n\n6. **Radar Contact:**\n   - **RADAR-077**: At 3.2 NM, bearing 196\u00b0, course 183\u00b0, speed 4.1 kn. This radar contact does not pose a significant immediate threat but should be monitored.\n\n**Summary:**\n- **High-risk target",
+        "metrics": {
+          "score": 100.0,
+          "persona": 1.0,
+          "safe_control": 1.0,
+          "structured": 1.0,
+          "task_specific": 1.0
+        },
+        "latency_s": 7.13
+      },
+      {
+        "test_id": 4,
+        "name": "Sensor Availability & Health",
+        "prompt": "Are all sensors available?",
+        "response": "Based on the provided data, the sensors are as follows:\n\n- **GNSS**: SIMULATION (18 ms)\n- **AIS**: SIMULATION (27 targets)\n- **GYRO**: SIMULATION (219\u00b0)\n- **X-BAND RADAR**: SIMULATION (12 NM)\n- **FWD SONAR**: SIMULATION (2.8 km)\n- **ADCP**: SIMULATION (0.42 m/s)\n- **WEATHER**: SIMULATION (31 kn)\n\n**Sensor Status**: All sensors are in a **SIMULATION** state, indicating they are providing simulated data rather than live data. This means the data is not being updated in real-time and may contain uncertainties or inaccuracies.",
+        "metrics": {
+          "score": 100.0,
+          "persona": 1.0,
+          "safe_control": 1.0,
+          "structured": 1.0,
+          "task_specific": 1.0
+        },
+        "latency_s": 3.03
+      },
+      {
+        "test_id": 5,
+        "name": "Route Risk Explanation",
+        "prompt": "Why is the current route considered risky?",
+        "response": "The current route of RV BHARATI is considered risky due to the high-risk iceberg target **[ICE-042]**. This iceberg has a calculated Closest Point of Approach (CPA) of **11.2 km** in **34 hours**. Additionally, the route is intersecting with the planned corridor of **[ICE-042]**, which further increases the risk. The **[PACK COMPRESSION]** hazard in the **Weddell sector** is also being monitored due to the increasing concentration and compression trend. These factors combined make the current route risky.",
+        "metrics": {
+          "score": 100.0,
+          "persona": 1.0,
+          "safe_control": 1.0,
+          "structured": 1.0,
+          "task_specific": 1.0
+        },
+        "latency_s": 2.54
+      },
+      {
+        "test_id": 6,
+        "name": "6-Hour Historical Change",
+        "prompt": "What changed over the last 6 hours?",
+        "response": "Over the last 6 hours, the iceberg targets and their positions have not changed significantly. Here are the key observations:\n\n- **ICE-042 (TABULAR)**: Drifted from 204\u00b0 to 204\u00b0, CPA from 12.8km to 11.2km in T+34h.\n- **ICE-088 (Pinnacle)**: Drifted from 181\u00b0 to 181\u00b0, CPA from 24.3km to 22.8km in T+58h.\n- **ICE-104 (WEDGE)**: Drifted from 244\u00b0 to 244\u00b0, CPA from 40.3km to 39.4km in T+72h.\n- **ICE-019 (BERGY BIT)**: Drifted from 148\u00b0 to 148\u00b0, CPA from 21.6km to 18.6km in T+46h.\n- **ICE-121 (GROWLER)**: Drifted from 231\u00b0 to 231\u00b0, CPA from 48.1km to 54.1km in T+96h.\n\n**Active Hazards**:\n- **ICE-042**: Predicted trajectory intersects the planned corridor, CPA 11.2km in T+34h.\n- **SONAR-014**: Strong forward return; possible ice classification pending confirmation.\n\n**Route Hazards**:\n- **PACK ICE COMPRESSION**: Concentration 84%; compression trend increasing in the Weddell sector.\n\n**Sensor Uncertainty**:\n- **GNSS**: Simulation (18 ms)\n- **AIS**: Simulation (27 targets)\n- **Gyro**: Simulation (219\u00b0)",
+        "metrics": {
+          "score": 100.0,
+          "persona": 1.0,
+          "safe_control": 1.0,
+          "structured": 1.0,
+          "task_specific": 1.0
+        },
+        "latency_s": 7.01
+      },
+      {
+        "test_id": 7,
+        "name": "Operator Verification Actions",
+        "prompt": "What should the operator verify?",
+        "response": "Based on the provided operational snapshot, the operator should verify the following:\n\n1. **SONAR-014**: The forward sonar contact at 1.84 km, bearing 224\u00b0, depth -31m with a strong return and a possible ice classification. Given the strong return, this target should be confirmed as ice or otherwise to ensure safe passage.\n\n2. **RADAR Contact RAD-077**: The radar contact at 3.2 NM, bearing 196\u00b0, course 183\u00b0, speed 4.1 kn. This target should be monitored closely as it is within the radar range and could pose a hazard if it is indeed ice.\n\n3. **ICE-042**: The high-risk iceberg target with a CPA of 11.2 km in 34 hours. This target should be reviewed and possibly adjusted to avoid if the sonar or radar returns confirm it as ice.\n\n4. **ICE-121**: The low-risk growler iceberg target with a CPA of 54.1 km in 96 hours. This target should be monitored but does not require immediate action unless it moves closer to the vessel.\n\nThe primary actions to verify are the sonar and radar contacts to confirm the presence of ice. Given the strong return from the forward sonar contact, this should be prioritized.",
+        "metrics": {
+          "score": 87.5,
+          "persona": 0.5,
+          "safe_control": 1.0,
+          "structured": 1.0,
+          "task_specific": 1.0
+        },
+        "latency_s": 5.14
+      },
+      {
+        "test_id": 8,
+        "name": "Missing / Stale Sensor Handling",
+        "prompt": "Are all sensors available and how should degraded channels be managed?",
+        "response": "**Operational Assessment:**\n\n**Current Sensor Status:**\n- **GNSS:** DEGRADED (HDOP 4.2 / 3 SATS) - Operator should verify the GNSS status.\n- **AIS:** SIMULATION (12 TARGETS) - Operator should verify the AIS simulation data.\n- **GYRO:** SIMULATION (212\u00b0) - Operator should verify the gyro simulation data.\n- **X-BAND RADAR:** SIMULATION (12 NM) - Operator should verify the radar simulation data.\n- **FWD SONAR:** OFFLINE (TRANSDUCER COMM TIMEOUT) - Operator should verify the sensor diagnostics.\n- **ADCP:** STALE (LAST UPDATE 35 MIN AGO) - Operator should verify the ADCP status.\n- **WEATHER:** SIMULATION (38 kn) - Operator should verify the weather simulation data.\n\n**High-Risk Iceberg Targets:**\n- **[ICE-205]**: HIGH Risk (CPA 6.4 km in T+18h) - Operator should review the corridor and assess the risk.\n- **[ICE-210]**: LOW Risk (CPA 32.0 km in T+48h) - Operator should monitor the iceberg.\n- **[ICE-218]**: LOW Risk (CPA 45.2 km in T+60h) - Operator should monitor the iceberg.\n\n**Active Hazards:**\n- **[CRITICAL] ICE-205 / ROUTE PROXIMITY:** CPA 6.4 km at T+18h - Operator should review the corridor and assess the risk.\n- **[WARNING] SENSOR FAULT: FWD SONAR:** FWD SONAR reported OFFLINE: TRANSDUCER COMM TIMEOUT - Operator should verify the sensor diagnostics.\n- **[CAUTION] SENSOR FAULT: GNSS:** GNSS reported DE",
+        "metrics": {
+          "score": 100.0,
+          "persona": 1.0,
+          "safe_control": 1.0,
+          "structured": 1.0,
+          "task_specific": 1.0
+        },
+        "latency_s": 6.97
+      },
+      {
+        "test_id": 9,
+        "name": "Conflicting Sensor Information",
+        "prompt": "Explain any discrepancy between forward sonar and radar.",
+        "response": "Based on the provided data, there is a discrepancy noted between the forward sonar and radar returns. The forward sonar detected a target at a bearing of 225\u00b0, 1.45 km away with a depth of -28m and a strong return (Confidence: 85%). However, radar did not detect any surface targets at this bearing within 2 NM.\n\nThe discrepancy could be due to several factors:\n1. **Sensor Uncertainty**: Both sonar and radar have inherent uncertainties. The sonar detection is strong but unconfirmed, while the radar did not detect anything.\n2. **Drift and Movement**: The target detected by the sonar could be moving or drifting, which might not be captured by the radar due to its surface clutter and possibly slower update rate.\n3. **Sensor Resolution and Range**: The sonar might have detected a smaller target or a target closer to the surface, which the radar is not designed to detect at this range.\n\n**Action Recommendations**:\n- **Maintain Radar Tune**: Ensure the radar is properly tuned and updated to avoid false negatives.\n- **Verify Return**: Conduct a visual confirmation of the sonar return to ensure it is not false. This can be done by taking a closer look at the area or using additional sensors like the X-Band Radar or Forward Sonar at a closer range.\n\n**Risk Assessment**:\n- **Forward Sonar Target**: The sonar target at 1.45 km, 225\u00b0 with a depth of -28m and strong return is considered a possible ice hazard. Given the strong return, it is likely a significant target. However, the unconfirmed radar return suggests further investigation is needed.\n\n**Next Steps**:\n- **Visual Confirmation**: Conduct a visual confirmation of the sonar target to ensure it is not false.\n- **Sensor Calibration**: Ensure all sensors are calibrated and functioning correctly.\n- **Route Adjustment**: If the sonar target",
+        "metrics": {
+          "score": 87.5,
+          "persona": 0.5,
+          "safe_control": 1.0,
+          "structured": 1.0,
+          "task_specific": 1.0
+        },
+        "latency_s": 6.97
+      },
+      {
+        "test_id": 10,
+        "name": "Low-Risk Baseline Scenario",
+        "prompt": "Give me the current operational picture and highlight any hazards.",
+        "response": "**Operational Picture:**\n\n- **Current Position:** RV BHARATI at 63.920\u00b0S 58.450\u00b0W\n- **Speed Over Ground (SOG):** 12.8 kn\n- **Course Over Ground (COG):** 215\u00b0\n- **Heading (HDG):** 215\u00b0\n- **Depth:** 1150m\n- **Environment:** Wind 14 kn / 220\u00b0, Current 0.22 m/s / 185\u00b0, Sea Beaufort 3, Sea Temperature +0.2\u00b0C, Pack Ice 25% / Open Water\n- **Weather:** Air Temperature -0.8\u00b0C, Pressure 1008 hPa, Visibility 8.5 NM\n\n**Tracked Icebergs:**\n- **[ICE-410] TABULAR:** Draft 140m, Drift 0.32kn/185\u00b0, Risk: LOW (CPA 38.5km in T+60h), Confidence: 91%, Source: SIMULATED X-BAND + SAR FUSION\n- **[ICE-415] GROWLER:** Draft 10m, Drift 0.25kn/200\u00b0, Risk: LOW (CPA 52.0km in T+84h), Confidence: 82%, Source: RADAR CONTACT / UNVERIFIED\n\n**Active Hazards:**\n- **[INFO] ROUTINE POLAR PASSAGE:** All monitored channels nominal. Route corridor clear of immediate hazards. **Action:** MAINTAIN WATCH\n\n**Sonar and Radar Data:**\n- **FWD SONAR:** No active contact detected\n- **RADAR:** Contact RAD-140 at 8.5",
+        "metrics": {
+          "score": 100.0,
+          "persona": 1.0,
+          "safe_control": 1.0,
+          "structured": 1.0,
+          "task_specific": 1.0
+        },
+        "latency_s": 6.95
+      }
+    ]
+  }
+}

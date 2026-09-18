@@ -1,0 +1,7 @@
+{
+  "datasets": [
+    { "id": "ne-50m-coastline", "name": "Natural Earth 1:50m Coastline", "region": "global", "format": "geojson", "category": "coastline", "path": "map-data/natural-earth/coastline.geojson", "crs": "WGS 84 geographic (from .prj)", "resolution": "1:50m", "loadStrategy": "local-maplibre-source", "defaultVisible": true, "browserStatus": "ready" },
+    { "id": "ne-50m-antarctic-shelves", "name": "Natural Earth 1:50m Antarctic Ice Shelves", "region": "antarctic", "format": "geojson", "category": "ice-shelves", "path": "map-data/natural-earth/ice-shelves.geojson", "crs": "WGS 84 geographic (from .prj)", "resolution": "1:50m", "loadStrategy": "local-maplibre-source", "defaultVisible": true, "browserStatus": "ready" },
+    { "id": "ne-50m-land", "name": "Natural Earth 1:50m Land", "region": "global", "format": "geojson", "category": "land", "path": "map-data/natural-earth/land.geojson", "crs": "WGS 84 geographic (from .prj)", "resolution": "1:50m", "loadStrategy": "local-maplibre-source", "defaultVisible": true, "browserStatus": "ready" }
+  ]
+}
