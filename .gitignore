@@ -10,12 +10,18 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 
-# Large artifacts (models are 94MB+, data is 82GB)
+# Large artifacts (training checkpoints are 90MB+, raw data is 82GB)
 *.pt
 *.pkl
 *.npz
 *.nc
 data/
+
+# ...but the four exported model artifacts DO ship. They are 29 MB together,
+# well inside GitHub's limits, and without them a fresh clone cannot run any
+# model - which makes the repository unreviewable. The 90 MB training
+# checkpoints they were built from stay out; these are the deliverable.
+!model_exports/*.pkl
 _removed_*/
 _quarantine_*/
 logs/

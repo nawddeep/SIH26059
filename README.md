@@ -106,6 +106,22 @@ integration/         cross-component glue
 
 ---
 
+## Verify every claim in this README
+
+```bash
+./verify.sh
+```
+
+Runs both test suites (96 tests), loads each exported artifact from disk and
+calls `predict()` on it, checks the SHA-256 against `manifest.json`, and prints
+the held-out evaluation numbers **read straight from the files the training runs
+wrote** — so the figures above can be checked against their source rather than
+taken on trust. Exits non-zero if anything fails.
+
+The four `.pkl` artifacts are committed (28 MB), so this works on a fresh clone.
+
+---
+
 ## Running it
 
 ```bash
@@ -141,7 +157,7 @@ is worse than one that does not exist.
 - **Vessel telemetry is display-only.** It is deliberately not an input to the
   models: telemetry is current while the ice archive is not, so anything derived
   from both would pair a real position with an eight-year-old environment.
-- **Trained weights are not in this repository.** `.pkl`, `.pt` and `.npz` are
-  gitignored (~120 MB). Rebuild the exports with
-  `shipNavigation/backend/scripts/export_model_pickles.py` once checkpoints are
-  in place.
+- **The 90 MB training checkpoints are not in this repository**, though the four
+  28 MB exported artifacts in `model_exports/` are, so `./verify.sh` runs on a
+  fresh clone. Retraining from scratch needs the checkpoints and the 82 GB raw
+  archive, neither of which belongs in git.
