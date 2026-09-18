@@ -95,6 +95,29 @@ There are **no simulated data sources**. Every endpoint returns an empty field
 tagged `unavailable` rather than substituting invented data, and routing raises
 rather than costing a route against a fabricated ice field.
 
+### Measured uncertainty
+
+Confidence comes from held-out error, not assumption. `GET /api/uncertainty`:
+
+| condition | expected error (MAE) | p90 |
+|---|---|---|
+| open water (SIC < 0.15) | **0.0031** | 0.0022 |
+| marginal ice zone (0.15–0.50) | **0.0971** | 0.2247 |
+| pack (0.50–0.85) | 0.0923 | 0.1692 |
+| consolidated (0.85+) | 0.0797 | 0.1195 |
+
+The steepest-gradient band carries **11.2×** the error of the flattest, so the
+ice edge is an order of magnitude harder than the interior.
+
+This is worth stating rather than averaging away: **the forecaster is
+near-perfect over open water and least confident in the marginal ice zone —
+exactly where a vessel operates.** Iceberg positions carry a 3.9 km envelope
+(the model's own held-out RMS), so a predicted position is the centre of a
+circle, not a point.
+
+Neither is a calibrated probabilistic forecast. Both say how wrong the model has
+been in conditions like these.
+
 ---
 
 ## Documentation

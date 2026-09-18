@@ -1,0 +1,76 @@
+{
+  "method": "held-out absolute error, +1d, binned by local gradient and concentration",
+  "samples": 40,
+  "testSplit": "2017-01-01..2018-12-31",
+  "overallMae": 0.0189,
+  "overallP90": 0.0793,
+  "byGradient": [
+    {
+      "gradientMin": 0.0,
+      "gradientMax": 0.02,
+      "cells": 2922226,
+      "mae": 0.0093,
+      "p90": 0.0027
+    },
+    {
+      "gradientMin": 0.02,
+      "gradientMax": 0.05,
+      "cells": 148948,
+      "mae": 0.0837,
+      "p90": 0.1344
+    },
+    {
+      "gradientMin": 0.05,
+      "gradientMax": 0.1,
+      "cells": 84134,
+      "mae": 0.0864,
+      "p90": 0.1586
+    },
+    {
+      "gradientMin": 0.1,
+      "gradientMax": 0.2,
+      "cells": 96471,
+      "mae": 0.0886,
+      "p90": 0.2026
+    },
+    {
+      "gradientMin": 0.2,
+      "gradientMax": 1.0,
+      "cells": 68981,
+      "mae": 0.1041,
+      "p90": 0.2288
+    }
+  ],
+  "byConcentration": [
+    {
+      "concMin": 0.0,
+      "concMax": 0.15,
+      "cells": 2679551,
+      "mae": 0.0031,
+      "p90": 0.0022
+    },
+    {
+      "concMin": 0.15,
+      "concMax": 0.5,
+      "cells": 71352,
+      "mae": 0.0971,
+      "p90": 0.2247
+    },
+    {
+      "concMin": 0.5,
+      "concMax": 0.85,
+      "cells": 150074,
+      "mae": 0.0923,
+      "p90": 0.1692
+    },
+    {
+      "concMin": 0.85,
+      "concMax": 1.01,
+      "cells": 419783,
+      "mae": 0.0797,
+      "p90": 0.1195
+    }
+  ],
+  "edgeToInteriorErrorRatio": 11.19,
+  "caveat": "Empirical error from held-out data, not a calibrated probabilistic forecast. It says how wrong this model has been in conditions like these, not how wrong it will be."
+}

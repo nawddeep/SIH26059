@@ -666,3 +666,33 @@ async def historical_replay(req: ReplayRequest):
     except Exception as exc:  # noqa: BLE001
         logger.exception("replay failed")
         raise HTTPException(500, f"{type(exc).__name__}: {exc}") from exc
+
+
+@app.get("/api/uncertainty")
+async def uncertainty_summary():
+    """Measured confidence for both trained models.
+
+    Derived from held-out error, not assumed. The sea-ice figures show the model
+    is near-perfect over open water and worst in the marginal ice zone - least
+    confident exactly where a vessel operates, which is worth surfacing rather
+    than averaging away.
+    """
+    try:
+        from .uncertainty import summary
+        return summary()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("uncertainty unavailable: %s", exc)
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
+@app.get("/api/uncertainty/at")
+async def uncertainty_at(
+    sic: float = Query(..., ge=0.0, le=1.0),
+    gradient: float = Query(default=None, ge=0.0, le=2.0),
+):
+    """Expected error for a sea-ice prediction at this concentration/gradient."""
+    try:
+        from .uncertainty import sea_ice_uncertainty
+        return sea_ice_uncertainty(sic, gradient)
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"{type(exc).__name__}: {exc}"}

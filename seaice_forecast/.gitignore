@@ -80,3 +80,5 @@ htmlcov/
 !output/drift_twostage_metrics.json
 
 !output/evaluation/rollout_comparison.json
+
+!output/evaluation/uncertainty_model.json
