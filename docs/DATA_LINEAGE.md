@@ -157,9 +157,11 @@ iceberg drift ──────────────────────
 telemetry gateway ──────────────────┴──► display only, not a model input
 ```
 
-Telemetry is deliberately **not** an input. It is current, while this archive
-ends 2018-12-31, so anything derived from both would pair a real position with an
-eight-year-old environment.
+Telemetry is deliberately **not** an input, and that is a decision rather than an
+omission. It is current; this archive ends 2018-12-31. Deriving a risk score from
+both would pair a real vessel position with an eight-year-old ice field and
+present it with a forecast's confidence — the same failure as the simulated data
+layers removed from this project, differing only in being harder to spot.
 
 ---
 

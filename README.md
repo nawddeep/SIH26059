@@ -3,14 +3,25 @@
 **Smart India Hackathon 2026 — Problem Statement 26059**
 Ministry of Earth Sciences (MoES) · National Centre for Polar and Ocean Research (NCPOR)
 
-AI-enabled forecasting of Antarctic sea-ice concentration, iceberg trajectory
-prediction, and safe / fuel-efficient route planning for research vessels —
-plus the shipboard data-acquisition pipeline that gets vessel telemetry ashore
-over a satellite link that barely exists below 70°S.
+Forecasting of Antarctic sea-ice concentration, iceberg trajectory prediction,
+and safe / fuel-efficient route planning for research vessels — plus the
+shipboard data-acquisition pipeline that gets vessel telemetry ashore over a
+satellite link that barely exists below 70°S.
+
+**Two trained models and two published standards.** The iceberg drift predictor
+and the sea-ice forecaster are fitted from data; POLARIS risk and the fuel model
+implement a regulatory standard and a physical model respectively and have no
+learned parameters. Calling all four "AI models" would be generous, so this
+document does not.
+
+That is a design choice, not a shortfall. POLARIS is the IMO's own Risk Index
+Outcome table — the instrument that decides whether a given hull may enter given
+ice. Replacing a regulatory standard with a neural network would make the system
+worse, not more advanced.
 
 ---
 
-## The four models
+## The four components
 
 | Model | Type | What it does | Measured performance |
 |-------|------|--------------|----------------------|
@@ -22,6 +33,31 @@ over a satellite link that barely exists below 70°S.
 Two hold weights fitted from data. Two implement published formulas and have
 **no learned parameters** — labelled as such throughout rather than dressed up
 with accuracy numbers they cannot have.
+
+### On the sea-ice result
+
+The headline is that the forecaster loses to persistence at +1d, and that is
+stated first rather than buried. Two things are worth knowing alongside it.
+
+**Persistence is the hard baseline at this horizon, not a trivial one.** Sea-ice
+concentration changes little in 24 hours, so "tomorrow resembles today" is close
+to optimal by construction. Beating it at short lead times is an open problem in
+sea-ice forecasting, not a sign of a botched implementation. The model does beat
+climatology by 2.4×, so it has learned real structure — it has simply not learned
+enough to overtake a baseline that is very strong here.
+
+**The model is weakest where it matters most.** Uncertainty measured on held-out
+data shows near-perfect performance over open water (MAE 0.003) and its worst
+performance in the marginal ice zone (MAE 0.097) — exactly where a vessel
+operates. A single overall MAE of 0.019 hides that entirely, because 97% of the
+domain is trivially predictable open water. That is the honest limitation, and
+it is a more useful thing to know than the headline number.
+
+**It is a next-day model and should not be used beyond that.** Driven
+autoregressively it compounds its own error and is beaten by climatology from
++5d. A direct multi-horizon architecture exists at
+`seaice_forecast/src/seaice_forecast/models/multi_horizon.py` and is the right
+way to serve longer leads; it is not what the shipped checkpoint trained.
 
 Exported as loadable artifacts in [`model_exports/`](model_exports/) with
 SHA-256 hashes and round-trip samples in `manifest.json`.
@@ -234,7 +270,11 @@ is worse than one that does not exist.
   hits a documented non-finite-loss problem — see
   [`seaice_forecast/OPEN_PROBLEM.md`](seaice_forecast/OPEN_PROBLEM.md).
 - **Nothing here is real-time.** The processed archive ends **2018-12-31**, so
-  every forecast is historical reanalysis.
+  every forecast is historical reanalysis — real measured data from NSIDC, ERA5
+  and GLORYS12, but not current. *Historical* and *simulated* are different
+  claims: there is no invented data anywhere in this system, and `scripts/ingest.py`
+  documents what acquiring current data would require and why the models would
+  need revalidation first.
 - **Vessel telemetry is display-only.** It is deliberately not an input to the
   models: telemetry is current while the ice archive is not, so anything derived
   from both would pair a real position with an eight-year-old environment.
