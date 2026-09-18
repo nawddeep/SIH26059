@@ -141,11 +141,36 @@ the 'time'   objective scores 38.28 on duration,         worse than 'fuel'     a
 Two distinct problems.
 
 **Serious — the safety objective.** It returns a track 119% longer that carries
-*higher* peak POLARIS risk and nearly double the distance in ice. A route
-labelled "Safest" that loses on every safety metric is worse than no safety
-option at all, because the label is what a reader trusts. The cost weights were
-rebalanced to make POLARIS dominant and cap the weather term, which changed the
-ordering but did not fix this case. Root cause is not yet established.
+*higher* peak POLARIS risk and nearly double the distance in ice.
+
+Partial root cause, established by sampling both corridors:
+
+```
+corridor    lat     lon   conc%  polaris  penalty
+direct    -66.0   -66.0    72.7    0.584     6.32x   severe patch
+western   -66.0   -79.0     0.2    0.000     1.01x   ice-free
+```
+
+A* is not malfunctioning. The direct corridor crosses a 6.32x penalty patch, and
+the safety objective routes around it through ice-free water. **The objective
+minimises risk-weighted total exposure** - it accepts 128 nm in light ice rather
+than 68 nm that includes a heavy patch. As a trade-off that is defensible.
+
+What this does **not** explain is why peak POLARIS risk ends up *higher* (0.541
+vs 0.373). Minimising a sum can raise a maximum, and for ice navigation "safest"
+arguably means minimising the worst moment a hull must survive rather than the
+integral of exposure - a hull either can take the ice in front of it or it
+cannot, and an average does not help. But that reasoning is a hypothesis, not a
+demonstrated cause.
+
+Ruled out by experiment: iceberg proximity (nearest berg 509 nm from the track),
+the weather term (disabling it made the route *worse* - 1503 nm at 0.854 peak
+risk, so weather was constraining rather than causing), and an ice-field mismatch
+between A* and the reported metrics (both call `get_sea_ice_concentration`).
+
+The likely fix is a minimax formulation for the safety objective - bound the
+worst cell the route may cross, rather than integrating exposure - but that is a
+different search, not a weight change, and it has not been implemented.
 
 **Minor — the other three.** `_leg_path` returns the great-circle track directly
 when `optimize_for == "distance"` and the track is land-free, bypassing A*
