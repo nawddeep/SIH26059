@@ -4,9 +4,14 @@
 #     ./verify.sh
 #
 # Runs the test suites, loads each exported model artifact and calls predict()
-# on it, and prints the held-out evaluation numbers straight from the files the
-# training runs wrote - so the figures in README.md can be checked against
-# their source rather than taken on trust.
+# on it, checks that every figure quoted in the documentation matches its source
+# file, and prints the held-out evaluation.
+#
+#     ./verify.sh                 check documented figures against stored results
+#     ./verify.sh --recompute     additionally re-derive the evaluation from the
+#                                 checkpoint and compare it to the stored result
+#                                 (slower, and the only check that proves the
+#                                 committed numbers are what the model produces)
 #
 # Exit code is non-zero if anything fails.
 
@@ -21,6 +26,9 @@ if [ ! -x "$PY" ]; then
   echo "   Set PY=/path/to/python and re-run."
   exit 1
 fi
+
+RECOMPUTE=0
+[ "${1:-}" = "--recompute" ] && RECOMPUTE=1
 
 fail=0
 hr() { printf '\n%s\n' "------------------------------------------------------------"; }
@@ -89,6 +97,17 @@ for entry in manifest["artifacts"]:
 sys.exit(1 if bad else 0)
 PYEOF
 [ $? -ne 0 ] && fail=1
+
+step "Documented figures vs their source files"
+"$PY" scripts/check_claims.py || fail=1
+
+if [ "$RECOMPUTE" -eq 1 ]; then
+  step "Re-deriving the evaluation from the checkpoint (a few minutes)"
+  (cd seaice_forecast && "$PY" scripts/evaluation/rollout_comparison.py \
+      --horizons 1 --max-samples 120 --stride 5 --out /tmp/recomputed.json 2>&1 \
+      | grep -E "^\+") || fail=1
+  "$PY" scripts/compare_recomputed.py /tmp/recomputed.json || fail=1
+fi
 
 step "Held-out evaluation (read from the files the training runs wrote)"
 "$PY" - <<'PYEOF'

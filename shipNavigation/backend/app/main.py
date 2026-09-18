@@ -387,3 +387,94 @@ async def telemetry_reset():
     """Clear the state so a demo starts from an empty dashboard."""
     from .telemetry import reset
     return reset()
+
+
+@app.get("/api/system-status")
+async def system_status():
+    """One call that answers "is this system actually working right now".
+
+    /api/model-status covers the three model-backed map layers. This covers
+    everything a reviewer or an operator needs before trusting a route: every
+    component, the date of the environmental data behind it, and whether the
+    shipboard telemetry link is up.
+
+    Each component is probed rather than assumed. "live" means it was exercised
+    during this request, not that a file exists on disk.
+    """
+    from datetime import datetime
+
+    components: dict[str, str] = {}
+    detail: dict[str, str] = {}
+
+    def probe(name: str, fn) -> None:
+        try:
+            fn()
+            components[name] = "live"
+        except Exception as exc:  # noqa: BLE001
+            components[name] = "unavailable"
+            detail[name] = f"{type(exc).__name__}: {exc}"
+
+    probe("sea_ice", lambda: __import__(
+        "app.model_bridge", fromlist=["sic_at_point"]).sic_at_point(-70.0, 0.0))
+    probe("iceberg", lambda: __import__(
+        "app.model_bridge", fromlist=["_drift_bundle"])._drift_bundle())
+
+    def _polaris():
+        from .model_bridge import ensure_seaice_importable
+        ensure_seaice_importable()
+        from seaice_forecast.risk.polaris import risk_ice
+        risk_ice(0.7, polar_class="PC4")
+    probe("polaris", _polaris)
+
+    def _fuel():
+        from .model_bridge import ensure_seaice_importable
+        ensure_seaice_importable()
+        from seaice_forecast.fuel import fuel_per_cell_array
+        fuel_per_cell_array(25.0, 0.5, polar_class="PC4")
+    probe("fuel", _fuel)
+
+    def _routing():
+        from .route_engine import ice_data_source
+        if "unavailable" in ice_data_source():
+            raise RuntimeError("no sea-ice field, so routing would have nothing to cost")
+    probe("routing", _routing)
+
+    try:
+        from .telemetry import live as telemetry_live
+        tel = telemetry_live()
+        components["telemetry"] = "connected" if tel.get("connected") else "no_data"
+        if tel.get("lastSeen"):
+            detail["telemetry"] = f"last record {tel['lastSeen']}"
+    except Exception as exc:  # noqa: BLE001
+        components["telemetry"] = "unavailable"
+        detail["telemetry"] = f"{type(exc).__name__}: {exc}"
+
+    # The newest day in the processed archive. Everything this system forecasts
+    # is anchored to it, so it is the single most load-bearing fact here: the
+    # system is not real-time and this is the number that proves it.
+    env_date = None
+    try:
+        from .model_bridge import DAILY
+        years = sorted(p for p in DAILY.iterdir() if p.is_dir() and p.name.isdigit())
+        if years:
+            days = sorted(f.stem for f in years[-1].glob("*.npz"))
+            if days:
+                env_date = datetime.strptime(days[-1], "%Y%m%d").strftime("%Y-%m-%d")
+    except Exception:  # noqa: BLE001
+        pass
+
+    model_backed = ("sea_ice", "iceberg", "polaris", "fuel", "routing")
+    degraded = [k for k in model_backed if components.get(k) != "live"]
+
+    return {
+        **components,
+        "environment_data_date": env_date,
+        "realtime": False,
+        "allLive": not degraded,
+        "degraded": degraded,
+        "detail": detail,
+        "note": (
+            "environment_data_date is the newest day in the processed archive. "
+            "Every forecast is historical reanalysis anchored to it, not a live feed."
+        ),
+    }

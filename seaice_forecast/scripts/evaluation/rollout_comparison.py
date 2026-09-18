@@ -136,6 +136,8 @@ def main() -> int:
                     help="days between forecast start dates (keeps runtime sane)")
     ap.add_argument("--max-samples", type=int, default=60)
     ap.add_argument("--device", default=None)
+    ap.add_argument("--out", default=None,
+                    help="write results here instead of the committed location")
     args = ap.parse_args()
 
     import torch
@@ -204,8 +206,9 @@ def main() -> int:
             "BEATS persistence" if row["beats_persistence"] else "beaten by persistence",
         )
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps({
+    out_path = Path(args.out) if args.out else OUT
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps({
         "method": "autoregressive rollout, perfect forcing",
         "caveat": (
             "The six atmospheric and oceanic channels are taken from the archive "
@@ -218,7 +221,7 @@ def main() -> int:
         "stride_days": args.stride,
         "horizons": results,
     }, indent=2))
-    logger.info("\nWrote %s", OUT.relative_to(ROOT))
+    logger.info("\nWrote %s", out_path)
     return 0
 
 

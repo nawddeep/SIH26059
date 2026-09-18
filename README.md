@@ -28,10 +28,14 @@ SHA-256 hashes and round-trip samples in `manifest.json`.
 
 ---
 
-## Data acquisition — the shipboard scraper
+## Shipboard Telemetry Acquisition & Store-and-Forward Gateway
 
-**[`telemetry-gateway/`](telemetry-gateway/)** — this is the data-scraping half
-of the system, and it solves a problem most polar prototypes ignore.
+**[`telemetry-gateway/`](telemetry-gateway/)** — the data-acquisition half of the
+system, and the part most polar prototypes skip.
+
+The pipeline is: **acquisition → parsing → prioritisation → persistent buffering
+→ reliable transmission → acknowledgement → de-duplication.** Not scraping: the
+ship's instruments are the source, and nothing here reads a screen or a web page.
 
 Below roughly 70°S there is little or no geostationary satellite coverage, so
 research vessels fall back on narrowband LEO links that are slow, costly per
@@ -51,7 +55,7 @@ ship instruments ──► gateway/ingest.py ──► gateway/buffer.py ──�
 
 | Component | File | Role |
 |-----------|------|------|
-| **Scraper / ingest** | `gateway/ingest.py` | Four concurrent TCP clients reading ship instruments; NMEA 0183 parsing with checksum validation, JSON parsing, priority tagging, independent per-feed reconnect with backoff |
+| **Acquisition / ingest** | `gateway/ingest.py` | Four concurrent TCP clients reading ship instruments; NMEA 0183 parsing with checksum validation, JSON parsing, priority tagging, independent per-feed reconnect with backoff |
 | **Buffer** | `gateway/buffer.py` | Durable SQLite queue (WAL) — the "store" in store-and-forward |
 | **Sender** | `gateway/sender.py` | Drains the queue highest-priority-first over the constrained link |
 | **Shore receiver** | `shore/shore_listener.py` | Acknowledges by sequence number, de-duplicates, optionally forwards to the dashboard |
@@ -109,14 +113,23 @@ integration/         cross-component glue
 ## Verify every claim in this README
 
 ```bash
-./verify.sh
+./verify.sh                 # fast: documents vs stored results
+./verify.sh --recompute     # slower: also re-derives the evaluation from the checkpoint
 ```
 
 Runs both test suites (96 tests), loads each exported artifact from disk and
-calls `predict()` on it, checks the SHA-256 against `manifest.json`, and prints
-the held-out evaluation numbers **read straight from the files the training runs
-wrote** — so the figures above can be checked against their source rather than
-taken on trust. Exits non-zero if anything fails.
+calls `predict()` on it, checks the SHA-256 against `manifest.json`, and then
+checks that **every performance figure in this README and in `OPEN_PROBLEM.md`
+matches the JSON the evaluation wrote** — 26 figures, and a mismatch fails the
+run. Performance numbers are never hand-maintained in two places.
+
+`--recompute` goes further: it re-derives the evaluation from the trained
+checkpoint and compares the fresh numbers against the committed ones. That is
+the only check that proves the stored results are what the model actually
+produces rather than a stale file.
+
+Also exposed at runtime: **`GET /api/system-status`** returns the live state of
+every component and the date of the environmental data behind it.
 
 The four `.pkl` artifacts are committed (28 MB), so this works on a fresh clone.
 
